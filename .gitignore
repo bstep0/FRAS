@@ -10,7 +10,7 @@ __pycache__/
 .env
 config.py
 instance/
-firebase-adminsdk.json  # Firebase service account key
+firebase-adminsdk.json
 
 # Ignore logs
 *.log
@@ -26,7 +26,7 @@ pip-delete-this-directory.txt
 .mypy_cache/
 .pytest_cache/
 
-# Ignore database files (if using SQLite locally)
+# Ignore database files
 *.sqlite3
 db.sqlite3
 
@@ -34,11 +34,6 @@ db.sqlite3
 frontend/node_modules/
 frontend/build/
 
-# Ignore generated coverage reports
-coverage/
-.coverage
-*.cover
-htmlcov/
 
 # Ignore editor and OS files
 .DS_Store
