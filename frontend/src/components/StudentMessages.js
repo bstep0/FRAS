@@ -16,6 +16,11 @@ const StudentMessages = () => {
               </Link>
             </li>
             <li className="mb-4">
+              <Link to="/student/classes" className="flex items-center p-2 hover:bg-gray-200 rounded">
+                📚 My Classes
+              </Link>
+            </li>
+            <li className="mb-4">
               <Link to="/student/messages" className="flex items-center p-2 hover:bg-gray-200 rounded">
                 💬 Messages
               </Link>

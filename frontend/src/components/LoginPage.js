@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { auth, db } from "../firebaseConfig";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -7,17 +10,46 @@ const LoginPage = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    
-    // Mock authentication logic (replace with backend authentication)
-    if (email === "admin@admin.com" && password === "password123") {
-      navigate("/admin");
-    } else if (email === "teacher@teacher.com" && password === "password123") {
-      navigate("/teacher");
-    } else if (email === "student@student.com" && password === "password123") {
-      navigate("/student");
-    } else {
+
+    try {
+      console.log("Attempting to log in:", email);
+
+      // Sign in the user
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      console.log("Signed in as:", user.email);
+
+      // Query Firestore to find the user by email
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("email", "==", email));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const userData = querySnapshot.docs[0].data();
+        console.log("User found in Firestore:", userData);
+
+        // Redirect based on role
+        switch (userData.role) {
+          case "admin":
+            navigate("/admin");
+            break;
+          case "teacher":
+            navigate("/teacher");
+            break;
+          case "student":
+            navigate("/student");
+            break;
+          default:
+            setError("Invalid role assigned to user.");
+        }
+      } else {
+        setError("User not found in the database.");
+        console.log("No matching user in Firestore.");
+      }
+    } catch (error) {
+      console.error("Login error:", error.message);
       setError("Invalid email or password");
     }
   };

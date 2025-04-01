@@ -5,12 +5,12 @@ import TeacherDashboard from "./components/TeacherDashboard";
 import StudentDashboard from "./components/StudentDashboard";
 import StudentClasses from "./components/StudentClasses"; 
 import StudentMessages from "./components/StudentMessages"; 
-import UserManagement from "./components/UserManagement";
 import LoginPage from "./components/LoginPage";
 import TeacherMessages from "./components/TeacherMessages";
 import TeacherClasses from "./components/TeacherClasses";
 import TeacherClassView from "./components/TeacherClassView";
 import TeacherMessageView from "./components/TeacherMessageView";
+import StudentClassView from "./components/StudentClassView";
 
 function App() {
   return (
@@ -21,7 +21,6 @@ function App() {
 
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminDashboard />} />
-        {/*<Route path="/admin/users" element={<UserManagement />} />*/}
 
         {/* Teacher Routes */}
         <Route path="/teacher" element={<TeacherDashboard />} />
@@ -32,8 +31,10 @@ function App() {
 
         {/* Student Routes */}
         <Route path="/student" element={<StudentDashboard />} />
-        {/*<Route path="/student/classes" element={<StudentClasses />} />
-        <Route path="/student/messages" element={<StudentMessages />} />*/}
+        <Route path="/student/classes" element={<StudentClasses />} />
+        <Route path="/student/messages" element={<StudentMessages />} />
+        <Route path="/student/classes/:classId" element={<StudentClassView />} />
+
       </Routes>
     </Router>
   );
