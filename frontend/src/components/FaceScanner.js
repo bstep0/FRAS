@@ -1,4 +1,3 @@
-// src/components/FaceScanner.js
 import React, { useRef, useState } from "react";
 
 const FaceScanner = ({ selectedClass }) => {
@@ -33,7 +32,6 @@ const FaceScanner = ({ selectedClass }) => {
     const dataURL = canvasRef.current.toDataURL("image/png");
     setCapturedSrc(dataURL);
 
-    // Optional: POST data to your Python backend
     try {
       const response = await fetch("/api/face-recognition", {
         method: "POST",
