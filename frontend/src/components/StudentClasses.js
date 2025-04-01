@@ -78,7 +78,7 @@ const StudentClasses = () => {
       }
     };
 
-    fetchClasses();.
+    fetchClasses();
   }, [user]);
 
   return (
