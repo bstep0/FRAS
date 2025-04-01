@@ -11,6 +11,8 @@ __pycache__/
 config.py
 instance/
 firebase-adminsdk.json
+src/firebaseConfig.js
+
 
 # Ignore logs
 *.log
