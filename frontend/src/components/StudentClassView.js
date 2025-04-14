@@ -6,7 +6,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 const StudentClassView = () => {
   const { classId } = useParams();
   const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth()); 
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [selectedDate, setSelectedDate] = useState(null);
   const user = auth.currentUser;
 
@@ -25,8 +25,7 @@ const StudentClassView = () => {
         }
 
         const studentDoc = userSnapshot.docs[0];
-        const studentData = studentDoc.data();
-        const studentId = studentData.id;
+        const studentId = studentDoc.id; 
 
         const attendanceRef = collection(db, "attendance");
         const attendanceQuery = query(
@@ -50,44 +49,71 @@ const StudentClassView = () => {
     fetchAttendanceRecords();
   }, [user, classId]);
 
-  // ---------------- CALENDAR LOGIC ----------------
+  const getAttendanceStatus = (date) => {
+    const record = attendanceRecords.find((r) => {
+      if (!r.date || !r.date.toDate) return false; 
+      const recordDate = r.date.toDate(); 
 
-  const generateSemesterDays = () => {
+      return (
+        recordDate.getFullYear() === date.getFullYear() &&
+        recordDate.getMonth() === date.getMonth() &&
+        recordDate.getDate() === date.getDate()
+      );
+    });
+
+    return record ? record.status : "Unknown";
+  };
+
+  const generateCalendarDays = () => {
     const year = new Date().getFullYear();
-    const start = new Date(year, 0, 1);
-    const end = new Date(year, 4, 31); 
-    let days = [];
+    const firstDayOfMonth = new Date(year, currentMonth, 1);
+    const lastDayOfMonth = new Date(year, currentMonth + 1, 0);
 
-    let current = new Date(start);
-    while (current <= end) {
-      const formattedDate = current.toLocaleDateString("en-US");
+    const days = [];
+    const startDayOfWeek = firstDayOfMonth.getDay();
+    const daysInMonth = lastDayOfMonth.getDate();
+
+    const prevMonthLastDay = new Date(year, currentMonth, 0).getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      const date = new Date(year, currentMonth - 1, prevMonthLastDay - i);
       days.push({
-        date: new Date(current),
-        formatted: formattedDate,
-        status: "Unknown",
+        date,
+        isCurrentMonth: false,
+        status: getAttendanceStatus(date),
       });
-      current.setDate(current.getDate() + 1);
     }
+
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      const date = new Date(year, currentMonth, i);
+      days.push({
+        date,
+        isCurrentMonth: true,
+        status: getAttendanceStatus(date),
+      });
+    }
+
+ 
+    const remaining = 42 - days.length; 
+    for (let i = 1; i <= remaining; i++) {
+      const date = new Date(year, currentMonth + 1, i);
+      days.push({
+        date,
+        isCurrentMonth: false,
+        status: getAttendanceStatus(date),
+      });
+    }
+
     return days;
   };
 
-  const semesterDays = generateSemesterDays().map((day) => {
-    const record = attendanceRecords.find((r) => r.date === day.formatted);
-    return record
-      ? { ...day, status: record.status }
-      : day;
-  });
-
-  const filteredDays = semesterDays.filter(
-    (day) => day.date.getMonth() === currentMonth
-  );
-
   const handlePrevMonth = () => {
-    setCurrentMonth((prev) => (prev === 0 ? 4 : prev - 1));
+    setCurrentMonth((prev) => (prev === 0 ? 11 : prev - 1));
     setSelectedDate(null);
   };
+
   const handleNextMonth = () => {
-    setCurrentMonth((prev) => (prev === 4 ? 0 : prev + 1));
+    setCurrentMonth((prev) => (prev === 11 ? 0 : prev + 1));
     setSelectedDate(null);
   };
 
@@ -99,6 +125,8 @@ const StudentClassView = () => {
     month: "long",
     year: "numeric",
   });
+
+  const days = generateCalendarDays();
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -137,20 +165,26 @@ const StudentClassView = () => {
 
         {/* Month Navigation */}
         <div className="flex items-center justify-center mb-4 space-x-2">
-          <button onClick={handlePrevMonth} className="bg-blue-600 text-white text-sm px-2 py-1 rounded hover:scale-105 transition-transform">
+          <button
+            onClick={handlePrevMonth}
+            className="bg-blue-600 text-white text-sm px-2 py-1 rounded hover:scale-105 transition-transform"
+          >
             Previous
           </button>
           <h2 className="text-xl font-semibold">{monthYearText}</h2>
-          <button onClick={handleNextMonth} className="bg-blue-600 text-white text-sm px-2 py-1 rounded hover:scale-105 transition-transform">
+          <button
+            onClick={handleNextMonth}
+            className="bg-blue-600 text-white text-sm px-2 py-1 rounded hover:scale-105 transition-transform"
+          >
             Next
           </button>
         </div>
 
-        {/* Calendar Grid */}
+        {/* Calendar */}
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-2xl font-semibold mb-4">Attendance Calendar</h2>
 
-          {/* Days of the Week Header */}
+          {/* Days of the Week */}
           <div className="grid grid-cols-7 gap-2 mb-2 text-center font-bold text-gray-600">
             <div>Sun</div>
             <div>Mon</div>
@@ -161,30 +195,37 @@ const StudentClassView = () => {
             <div>Sat</div>
           </div>
 
-          {/* Render Days */}
+          {/* Render Full Calendar */}
           <div className="grid grid-cols-7 gap-2">
-            {filteredDays.map((day, idx) => {
+            {days.map((dayObj, idx) => {
+              const { date, isCurrentMonth, status } = dayObj;
+
               let symbol = "⬜";
-              let textColor = "text-gray-400";
-              if (day.status === "Present") {
+              let textColor = isCurrentMonth ? "text-gray-700" : "text-gray-400";
+
+              if (status === "Present") {
                 symbol = "Present ✅";
-                textColor = "text-green-600";
-              } else if (day.status === "Absent") {
+                textColor = isCurrentMonth ? "text-green-600" : "text-green-400";
+              } else if (status === "Absent") {
                 symbol = "Absent ❌";
-                textColor = "text-red-600";
-              } else if (day.status === "Late") {
+                textColor = isCurrentMonth ? "text-red-600" : "text-red-400";
+              } else if (status === "Late") {
                 symbol = "Late ⚠️";
-                textColor = "text-yellow-500";
+                textColor = isCurrentMonth ? "text-yellow-500" : "text-yellow-300";
               }
 
               const isSelected =
-                selectedDate && selectedDate.formatted === day.formatted
+                selectedDate && selectedDate.date.toDateString() === date.toDateString()
                   ? "border-2 border-blue-400"
                   : "";
 
               return (
-                <div key={idx} onClick={() => handleDateClick(day)} className={`p-4 border rounded-lg text-center cursor-pointer transition-transform hover:scale-105 hover:bg-gray-100 ${textColor} ${isSelected}`}>
-                  <p className="text-gray-700">{day.formatted}</p>
+                <div
+                  key={idx}
+                  onClick={() => handleDateClick({ date, status })}
+                  className={`p-4 border rounded-lg text-center cursor-pointer transition-transform hover:scale-105 hover:bg-gray-100 ${textColor} ${isSelected}`}
+                >
+                  <p className="text-gray-700">{date.getDate()}</p>
                   <p className="text-2xl">{symbol}</p>
                 </div>
               );
@@ -196,7 +237,7 @@ const StudentClassView = () => {
         {selectedDate && (
           <div className="mt-6 p-4 bg-white rounded-lg shadow">
             <h3 className="text-xl font-semibold mb-2">
-              Details for {selectedDate.formatted}
+              Details for {selectedDate.date.toLocaleDateString("en-US")}
             </h3>
             <p>Status: {selectedDate.status}</p>
           </div>

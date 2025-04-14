@@ -6,6 +6,7 @@ import FaceScanner from "../components/FaceScanner";
 
 const StudentDashboard = () => {
   const [classes, setClasses] = useState([]);
+  const [studentId, setStudentId] = useState("");
   const user = auth.currentUser;
 
   const [showScanFlow, setShowScanFlow] = useState(false);
@@ -27,24 +28,43 @@ const StudentDashboard = () => {
 
         const studentDoc = userSnap.docs[0];
         const studentData = studentDoc.data();
+        setStudentId(studentDoc.id);
         const enrolledClassIds = studentData.classes || [];
 
         if (enrolledClassIds.length === 0) {
           setClasses([]);
           return;
         }
-
         let fetchedClasses = [];
         for (let classId of enrolledClassIds) {
           const classRef = doc(db, "classes", classId);
           const classSnap = await getDoc(classRef);
           if (classSnap.exists()) {
+            const classData = classSnap.data();
+
+            let teacherName = "";
+            const teacherId = classData.teacher;
+            if (teacherId) {
+              const teacherRef = doc(db, "users", teacherId);
+              const teacherSnap = await getDoc(teacherRef);
+              if (teacherSnap.exists()) {
+                const teacherData = teacherSnap.data();
+                teacherName = `${teacherData.fname} ${teacherData.lname}`;
+              } else {
+                teacherName = teacherId;
+              }
+            }
+        
             fetchedClasses.push({
               id: classSnap.id,
-              ...classSnap.data()
+              name: classData.name,
+              teacher: teacherName,
+              room: classData.room,
+              schedule: classData.schedule,
             });
           }
         }
+        
         setClasses(fetchedClasses);
       } catch (error) {
         console.error("Error fetching classes:", error);
@@ -53,6 +73,10 @@ const StudentDashboard = () => {
 
     fetchClasses();
   }, [user]);
+
+  const refreshAttendance = () => {
+    window.location.reload();
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -82,7 +106,6 @@ const StudentDashboard = () => {
 
       <main className="flex-1 p-8">
         <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
-
         {/* Attendance History Card */}
         <div className="bg-gray-200 p-6 rounded-lg mb-10">
           <h2 className="text-xl text-black font-semibold">Attendance History</h2>
@@ -99,9 +122,9 @@ const StudentDashboard = () => {
           <h2 className="text-xl text-black font-semibold">Record Attendance</h2>
           <p className="text-black">Scan your face to mark your attendance</p>
           <div className="flex space-x-4 mt-4">
-          <button onClick={() => setShowScanFlow(!showScanFlow)} className="bg-green-600 text-white px-4 py-2 rounded mb-4">
-            {showScanFlow ? "Cancel" : "Start Scan"}
-          </button>
+            <button onClick={() => setShowScanFlow(!showScanFlow)} className="bg-green-600 text-white px-4 py-2 rounded mb-4">
+              {showScanFlow ? "Cancel" : "Start Scan"}
+            </button>
           </div>
         </div>
         {showScanFlow && (
@@ -116,7 +139,13 @@ const StudentDashboard = () => {
               ))}
             </select>
 
-            {selectedClass && <FaceScanner selectedClass={selectedClass} />}
+            {selectedClass && (
+              <FaceScanner 
+                selectedClass={selectedClass}  
+                studentId={studentId} 
+                refreshAttendance={refreshAttendance} 
+              />
+            )}
           </div>
         )}
 

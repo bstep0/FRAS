@@ -32,10 +32,12 @@ pip-delete-this-directory.txt
 *.sqlite3
 db.sqlite3
 
-# Ignore node_modules and build files (for frontend)
+# Ignore node_modules and build files
 frontend/node_modules/
 frontend/build/
 
+# Ignore tracking of images
+backend/models/known_faces/
 
 # Ignore editor and OS files
 .DS_Store

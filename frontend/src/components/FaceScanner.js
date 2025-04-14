@@ -1,101 +1,79 @@
-import React, { useRef, useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
-const FaceScanner = ({ selectedClass }) => {
+const FaceScanner = ({ selectedClass, studentId }) => {
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const [stream, setStream] = useState(null);
-  const [capturedSrc, setCapturedSrc] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const navigate = useNavigate();
 
-  const startCamera = async () => {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
-      }
-    } catch (error) {
-      console.error("Error accessing camera:", error);
-    }
+  const startVideo = () => {
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((stream) => {
+        videoRef.current.srcObject = stream;
+      })
+      .catch((error) => {
+        console.error("Error accessing camera:", error);
+      });
   };
+
+  useEffect(() => {
+    startVideo();
+  }, []);
 
   const capturePhoto = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const width = videoRef.current.videoWidth;
-    const height = videoRef.current.videoHeight;
-    canvasRef.current.width = width;
-    canvasRef.current.height = height;
+    if (!videoRef.current) return;
 
-    const ctx = canvasRef.current.getContext("2d");
-    ctx.drawImage(videoRef.current, 0, 0, width, height);
-
-    const dataURL = canvasRef.current.toDataURL("image/png");
-    setCapturedSrc(dataURL);
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext("2d").drawImage(videoRef.current, 0, 0);
+    const dataURL = canvas.toDataURL("image/jpeg");
 
     try {
-      const response = await fetch("/api/face-recognition", {
+      setScanning(true);
+
+      const response = await fetch("http://localhost:5000/api/face-recognition", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          image: dataURL,
-          classId: selectedClass
-        })
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ image: dataURL, classId: selectedClass, studentId: studentId }),
       });
+
       const result = await response.json();
       console.log("Recognition result:", result);
-    } catch (error) {
-      console.error("Error sending image:", error);
-    }
-  };
 
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+      if (result.status === "success") {
+        alert(`✅ Attendance recorded! Status: ${result.attendance_status}`);
+        navigate(`/student/classes/${selectedClass}`, { replace: true });
+      } else if (result.status === "already_marked") {
+        alert("⚠️ Attendance already recorded today.");
+        navigate(`/student/classes/${selectedClass}`);
+      } else {
+        alert(`❌ ${result.message}`);
+      }
+
+    } catch (error) {
+      console.error("Error during recognition:", error);
+      alert("❌ Error during face recognition.");
+    } finally {
+      setScanning(false);
     }
   };
 
   return (
-    <div className="bg-white p-4 mb-4 rounded-lg shadow">
-      <h2 className="text-xl font-semibold mb-2">Scan Your Face</h2>
-      <p className="text-gray-600 mb-2">Class: {selectedClass}</p>
-      
+    <div>
       <video
         ref={videoRef}
-        className="w-64 h-48 bg-black mb-2"
         autoPlay
-        muted
-      />
+        playsInline
+        style={{ width: "300px", height: "300px", background: "#000" }}
+      ></video>
 
-      <div className="flex space-x-2 mb-2">
-        <button
-          onClick={startCamera}
-          className="bg-blue-600 text-white px-3 py-1 rounded"
-        >
-          Start
-        </button>
-        <button
-          onClick={capturePhoto}
-          className="bg-green-600 text-white px-3 py-1 rounded"
-        >
-          Capture
-        </button>
-        <button
-          onClick={stopCamera}
-          className="bg-red-600 text-white px-3 py-1 rounded"
-        >
-          Stop
-        </button>
-      </div>
-
-      <canvas ref={canvasRef} className="hidden" />
-
-      {capturedSrc && (
-        <div>
-          <h3 className="font-semibold mt-2">Captured Photo:</h3>
-          <img src={capturedSrc} alt="Captured face" className="border mt-2" />
-        </div>
-      )}
+      <button onClick={capturePhoto} disabled={scanning} className="bg-green-600 text-white px-3 py-1 rounded mt-4"> 
+        {scanning ? "Scanning..." : "Capture Face"}
+      </button>
     </div>
   );
 };

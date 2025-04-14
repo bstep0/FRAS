@@ -33,7 +33,8 @@ function App() {
         <Route path="/student" element={<StudentDashboard />} />
         <Route path="/student/classes" element={<StudentClasses />} />
         <Route path="/student/messages" element={<StudentMessages />} />
-        <Route path="/student/classes/:classId" element={<StudentClassView />} />
+        <Route path="/student/classes/:classId" element={<StudentClassView key={window.location.pathname} />} />
+
 
       </Routes>
     </Router>
