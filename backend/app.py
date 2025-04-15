@@ -120,12 +120,15 @@ def face_recognition():
 
         # Use DeepFace to verify the face. Compare the captured face (temp_captured_path)
         # with the known face downloaded from storage (temp_known_path).
+        print("Running DeepFace.verify...")
         verify_result = DeepFace.verify(
-            img1_path=temp_captured_path,
-            img2_path=temp_known_path,
-            model_name="Facenet512",
-            enforce_detection=False
+        img1_path=temp_captured_path,
+        img2_path=temp_known_path,
+        model_name="Facenet512",
+        enforce_detection=False
         )
+        print("DeepFace.verify completed.")
+
         print("DeepFace verify result:", verify_result)
         if not verify_result.get("verified", False):
             return jsonify({"status": "fail", "message": "Face not recognized"}), 404
