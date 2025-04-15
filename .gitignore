@@ -11,7 +11,8 @@ __pycache__/
 config.py
 instance/
 firebase-adminsdk.json
-src/firebaseConfig.js
+frontend/src/firebaseConfig.js
+backend/firebase/firebase_credentials.json
 
 
 # Ignore logs
@@ -45,3 +46,4 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
