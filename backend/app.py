@@ -7,11 +7,26 @@ from firebase_admin import credentials, firestore, storage
 import datetime
 import os
 from deepface import DeepFace
-from flask_cors import CORS
 from zoneinfo import ZoneInfo  
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "https://csce-4095---it-capstone-i.web.app"}})
+
+@app.after_request
+def add_cors_headers(response):
+    # Overwrite any existing header with our specific allowed origin.
+    response.headers["Access-Control-Allow-Origin"] = "https://csce-4095---it-capstone-i.web.app"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS,PUT,DELETE"
+    return response
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Create a JSON response with our error and force the CORS header
+    response = jsonify({"status": "error", "message": str(e)})
+    response.headers["Access-Control-Allow-Origin"] = "https://csce-4095---it-capstone-i.web.app"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS,PUT,DELETE"
+    return response, 500
 
 # Define the path for secret credentials.
 secret_path = '/etc/secrets/firebase_credentials.json'
