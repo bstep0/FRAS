@@ -7,18 +7,11 @@ from firebase_admin import credentials, firestore, storage
 import datetime
 import os
 from deepface import DeepFace
-from flask_cors import CORS, cross_origin
+from flask_cors import CORS
 from zoneinfo import ZoneInfo  
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
-
-@app.after_request
-def add_cors_headers(response):
-    response.headers.add("Access-Control-Allow-Origin", "*")
-    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-    response.headers.add("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS")
-    return response
+CORS(app, resources={r"/*": {"origins": "https://csce-4095---it-capstone-i.web.app"}})
 
 # Define the path for secret credentials.
 secret_path = '/etc/secrets/firebase_credentials.json'
@@ -78,7 +71,6 @@ def get_attendance_status(now_dt, start_dt, end_dt):
         return "Late", None
 
 @app.route("/api/face-recognition", methods=["POST", "OPTIONS"])
-@cross_origin()
 def face_recognition():
     if request.method == "OPTIONS":
         return "", 200
