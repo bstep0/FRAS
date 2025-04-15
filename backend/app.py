@@ -85,7 +85,7 @@ def get_attendance_status(now_dt, start_dt, end_dt):
     else:
         return "Late", None
 
-@app.route("/api/face-recognition", methods=["POST", "OPTIONS"])
+@app.route("/api/face-recognition", methods=["POST", "OPTIONS"], strict_slashes=False)
 def face_recognition():
     if request.method == "OPTIONS":
         return "", 200
