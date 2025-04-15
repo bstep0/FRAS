@@ -8,15 +8,18 @@ import datetime
 import os
 from deepface import DeepFace
 from flask_cors import CORS
-import tzlocal  # For obtaining local timezone info
+from zoneinfo import ZoneInfo  
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)  
 
 # Initialize Firebase
 cred = credentials.Certificate("firebase/firebase_credentials.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
+
+# Timezone for Central Time
+CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 def parse_time_12h(timestr):
     """
@@ -44,46 +47,58 @@ def parse_schedule(schedule_str):
     return start_time, end_time
 
 def get_attendance_status(now_dt, start_dt, end_dt):
-
+    
+    # Allowed to start scanning 5 minutes before class starts
     allowed_start = start_dt - datetime.timedelta(minutes=5)
+    # Up to 15 minutes after class start is "Present"
     present_cutoff = start_dt + datetime.timedelta(minutes=15)
-    """
+
+    # 1) If scanning too early
     if now_dt < allowed_start:
         return None, "Attendance cannot be recorded before the allowed time."
-    if now_dt >= end_dt:
-        return "Absent", None
+
+    # 2) If scanning after class end time
+    if now_dt > end_dt:
+        return None, "Attendance cannot be recorded after the allowed time."
+
+    # 3) Otherwise we are within [allowed_start, end_dt]
     if now_dt <= present_cutoff:
         return "Present", None
     else:
         return "Late", None
-    """
-    return "Present", None # for testing, comment out 
+    
+    # For testing purposes to show "Present" can be recorded, uncomment the line below:
+    # return "Present", None
 
 @app.route("/api/face-recognition", methods=["POST", "OPTIONS"])
 def face_recognition():
     if request.method == "OPTIONS":
         return "", 200
 
+    # Create temp file
     temp_image_path = "temp_face.jpg"
+
     try:
         data = request.get_json()
         image_b64 = data.get("image")
         class_id = data.get("classId")
-        student_id = data.get("studentId")  
+        student_id = data.get("studentId")
 
         if not image_b64 or not class_id or not student_id:
             return jsonify({"status": "error", "message": "Missing image, classId, or studentId"}), 400
 
-        # Construct the dynamic path for the student's known face image.
+        # Path for the student's known face image
         known_face_path = f"models/known_faces/{student_id}.jpg"
+        if not os.path.exists(known_face_path):
+            return jsonify({"status": "error", "message": "No known face image found for this student."}), 404
 
-        # 1) Decode the incoming Base64 image and save it to a temporary file.
+        # Decode the incoming Base64 image and save it to a temporary file
         image_data = base64.b64decode(image_b64.split(',')[1])
         np_arr = np.frombuffer(image_data, np.uint8)
         img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         cv2.imwrite(temp_image_path, img)
 
-        # 2) Use DeepFace.verify to compare the scanned image with the student's known image.
+        # Compare the scanned image with the student's known image
         verify_result = DeepFace.verify(
             img1_path=temp_image_path,
             img2_path=known_face_path,
@@ -94,48 +109,55 @@ def face_recognition():
         if not verify_result.get("verified", False):
             return jsonify({"status": "fail", "message": "Face not recognized"}), 404
 
-        # 3) Get the current local time.
-        local_tz = tzlocal.get_localzone()
-        now_local = datetime.datetime.now(local_tz)
-        today_str = now_local.strftime("%Y-%m-%d")
+        # Get the current time in Central Time
+        now_central = datetime.datetime.now(CENTRAL_TZ)
+        today_str = now_central.strftime("%Y-%m-%d")
         doc_id = f"{class_id}_{student_id}_{today_str}"
 
-        # 4) Check if an attendance record already exists.
+        # Check if an attendance record already exists
         attendance_doc = db.collection("attendance").document(doc_id).get()
         if attendance_doc.exists:
             return jsonify({"status": "already_marked", "message": "Attendance already recorded today."}), 200
 
-        # 5) Retrieve the class document to get the schedule.
+        # Retrieve the class document to get the schedule
         class_doc = db.collection("classes").document(class_id).get()
         if not class_doc.exists:
             return jsonify({"status": "error", "message": "Class not found"}), 404
+
         class_data = class_doc.to_dict()
         schedule_str = class_data.get("schedule", "").strip()
         if not schedule_str:
             return jsonify({"status": "error", "message": "No schedule defined for this class"}), 400
 
-        # 6) Parse the schedule (e.g., "MWF 8:30AM - 9:50AM") into start and end times.
+        # Parse the schedule ("MWF 8:30AM - 9:50AM") into start and end times.
         start_time, end_time = parse_schedule(schedule_str)
         if not start_time or not end_time:
             return jsonify({"status": "error", "message": "Invalid schedule format"}), 400
 
-        # 7) Build today's datetime objects for the class start and end times (based on local time).
-        start_dt = now_local.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0)
-        end_dt = now_local.replace(hour=end_time.hour, minute=end_time.minute, second=0, microsecond=0)
+        # Create today's datetime objects for the class start and end times in central time
+        start_dt = datetime.datetime(
+            now_central.year, now_central.month, now_central.day,
+            start_time.hour, start_time.minute, 0, 0,
+            tzinfo=CENTRAL_TZ
+        )
+        end_dt = datetime.datetime(
+            now_central.year, now_central.month, now_central.day,
+            end_time.hour, end_time.minute, 0, 0,
+            tzinfo=CENTRAL_TZ
+        )
 
-        # 8) Compute the attendance status (or reject the scan if outside the allowed window).
-        status, error_msg = get_attendance_status(now_local, start_dt, end_dt)
+        # Attendance status
+        status, error_msg = get_attendance_status(now_central, start_dt, end_dt)
         if error_msg:
             return jsonify({"status": "fail", "message": error_msg}), 400
 
         print("Computed attendance status:", status)
 
-        # 9) Record the attendance. (Store the local time as a naive datetime representing local time.)
-        stored_time = now_local.replace(tzinfo=None)
+        # Record the attendance
         attendance_record = {
             "studentID": student_id,
             "classID": class_id,
-            "date": stored_time,
+            "date": now_central,
             "status": status,
         }
         db.collection("attendance").document(doc_id).set(attendance_record)
