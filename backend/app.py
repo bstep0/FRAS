@@ -7,7 +7,7 @@ from firebase_admin import credentials, firestore, storage
 import datetime
 import os
 from deepface import DeepFace
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from zoneinfo import ZoneInfo  
 
 app = Flask(__name__)
@@ -72,6 +72,7 @@ def get_attendance_status(now_dt, start_dt, end_dt):
         return "Late", None
 
 @app.route("/api/face-recognition", methods=["POST", "OPTIONS"])
+@cross_origin()
 def face_recognition():
     if request.method == "OPTIONS":
         return "", 200
