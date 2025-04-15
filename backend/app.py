@@ -11,7 +11,8 @@ from flask_cors import CORS
 from zoneinfo import ZoneInfo  
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
+
 
 # Define the path for secret credentials.
 secret_path = '/etc/secrets/firebase_credentials.json'
