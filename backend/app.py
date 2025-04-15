@@ -124,7 +124,7 @@ def face_recognition():
         verify_result = DeepFace.verify(
         img1_path=temp_captured_path,
         img2_path=temp_known_path,
-        model_name="Facenet512",
+        model_name="VGG-Face",
         enforce_detection=False
         )
         print("DeepFace.verify completed.")
