@@ -110,6 +110,7 @@ def face_recognition():
 
         # Use DeepFace to verify the face. Compare the captured face (temp_captured_path)
         # with the known face downloaded from storage (temp_known_path).
+        """
         print("Running DeepFace.verify...")
         verify_result = DeepFace.verify(
         img1_path=temp_captured_path,
@@ -118,6 +119,13 @@ def face_recognition():
         enforce_detection=False
         )
         print("DeepFace.verify completed.")
+        """
+        print("Mocking DeepFace verification")
+        verify_result = {
+        "verified": True,
+        "distance": 0.12,
+        "max_threshold_to_verify": 0.3
+        }
 
         print("DeepFace verify result:", verify_result)
         if not verify_result.get("verified", False):
