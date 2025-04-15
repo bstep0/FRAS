@@ -33,7 +33,7 @@ const FaceScanner = ({ selectedClass, studentId }) => {
     try {
       setScanning(true);
 
-      const response = await fetch("http://localhost:5000/api/face-recognition", {
+      const response = await fetch("https://facialrecognitionattendancesystem.onrender.com/api/face-recognition", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
