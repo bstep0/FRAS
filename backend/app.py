@@ -13,8 +13,15 @@ from zoneinfo import ZoneInfo
 app = Flask(__name__)
 CORS(app)  
 
-# Initialize Firebase
-cred = credentials.Certificate("firebase/firebase_credentials.json")
+secret_path = '/etc/secrets/firebase_credentials.json'
+
+if os.path.exists(secret_path):
+    # Load Firebase credentials from the secret file
+    cred = credentials.Certificate(secret_path)
+else:
+    cred = credentials.Certificate("backend/firebase/firebase_credentials.json")
+
+# Initialize the Firebase app with the credentials.
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
@@ -178,4 +185,5 @@ def face_recognition():
             os.remove(temp_image_path)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
