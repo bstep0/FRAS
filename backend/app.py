@@ -18,35 +18,34 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
 
-# Define the path for secret credentials.
+# Define the path for credentials
 secret_path = '/etc/secrets/firebase_credentials.json'
 if os.path.exists(secret_path):
     cred = credentials.Certificate(secret_path)
 else:
     cred = credentials.Certificate("backend/firebase/firebase_credentials.json")
 
-# Initialize Firebase app with storage configuration.
+# Initialize Firebase app with storage configuration
 firebase_admin.initialize_app(cred, {
     "storageBucket": "csce-4095---it-capstone-i.firebasestorage.app"
 })
 db = firestore.client()
-bucket = storage.bucket()  # Initialized with the above storageBucket.
+bucket = storage.bucket()  # Initialize storage bucket 
 
 # Timezone for Central Time
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 def parse_time_12h(timestr):
-    """
-    Parse a 12-hour formatted time string (e.g., "12:30PM") into a datetime.time object.
-    """
+    
+    # Parse a 12-hour formatted time string into a datetime.time object.
     timestr = timestr.strip().upper()
     return datetime.datetime.strptime(timestr, "%I:%M%p").time()
 
 def parse_schedule(schedule_str):
     """
-    Expects a schedule string like "MWF 8:30AM - 9:50AM" (or "8:30AM - 9:50AM").
-    The day tokens (like "MWF") are ignored.
-    Returns (start_time, end_time) as datetime.time objects or (None, None) if invalid.
+    Expects a schedule string like "MWF 8:30AM - 9:50AM"
+    The days like MWF are ignored
+    Returns start_time and  end_time as datetime.time objects
     """
     parts = schedule_str.strip().split()
     if parts and not any(char.isdigit() for char in parts[0]):
@@ -61,15 +60,15 @@ def parse_schedule(schedule_str):
     return start_time, end_time
 
 def get_attendance_status(now_dt, start_dt, end_dt):
-    # Allowed to start scanning 5 minutes before class starts
+    # Students can start scanning their attendance 5 minutes before class starts
     allowed_start = start_dt - datetime.timedelta(minutes=5)
-    # Up to 15 minutes after class start is "Present"
+    # Up to 15 minutes after class start is considered present
     present_cutoff = start_dt + datetime.timedelta(minutes=15)
     
     if now_dt < allowed_start:
-        return None, "Attendance cannot be recorded before the allowed time."
+        return None, "Attendance cannot be recorded before the allowed time." # If attempted before allowed time
     if now_dt > end_dt:
-        return None, "Attendance cannot be recorded after the allowed time."
+        return None, "Attendance cannot be recorded after the allowed time." # If attempted after class end time
     if now_dt <= present_cutoff:
         return "Present", None
     else:
@@ -80,7 +79,7 @@ def face_recognition():
     if request.method == "OPTIONS":
         return "", 200
 
-    # Temporary filenames for the captured face and the known face downloaded from storage.
+    # Temporary filenames for the captured face and the known face downloaded from storage
     temp_captured_path = "temp_captured_face.jpg"
     temp_known_path = "temp_known_face.jpg"
 
@@ -93,14 +92,14 @@ def face_recognition():
         if not image_b64 or not class_id or not student_id:
             return jsonify({"status": "error", "message": "Missing image, classId, or studentId"}), 400
 
-        # Download the known face image from Firebase Storage.
-        # Assumes known face images are stored under the "known_faces/" folder in your bucket.
+        # Download the known face image from storage
+        # Assumes that known face images are stored under the "known_faces/" folder in our bucket
         blob = bucket.blob(f"known_faces/{student_id}.jpg")
         if not blob.exists():
             return jsonify({"status": "error", "message": "No known face image found for this student."}), 404
         blob.download_to_filename(temp_known_path)
 
-        # Decode the incoming Base64 image, save it as the captured face.
+        # Decode the base64 image and save it as the captured face
         image_data = base64.b64decode(image_b64.split(',')[1])
         np_arr = np.frombuffer(image_data, np.uint8)
         captured_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -108,8 +107,7 @@ def face_recognition():
             return jsonify({"status": "error", "message": "Captured image could not be decoded."}), 400
         cv2.imwrite(temp_captured_path, captured_img)
 
-        # Use DeepFace to verify the face. Compare the captured face (temp_captured_path)
-        # with the known face downloaded from storage (temp_known_path).
+        # Use DeepFace to verify the face. Compare the captured face with the known face downloaded from storage
         """
         print("Running DeepFace.verify...")
         verify_result = DeepFace.verify(
@@ -120,7 +118,8 @@ def face_recognition():
         )
         print("DeepFace.verify completed.")
         """
-        print("Mocking DeepFace verification")
+        # Verified result for testing purposes
+        # Uncomment the above DeepFace.verify code and comment the below lines for real scan
         verify_result = {
         "verified": True,
         "distance": 0.12,
@@ -131,17 +130,17 @@ def face_recognition():
         if not verify_result.get("verified", False):
             return jsonify({"status": "fail", "message": "Face not recognized"}), 404
 
-        # Get current Central Time
+        # Get current central time
         now_central = datetime.datetime.now(CENTRAL_TZ)
         today_str = now_central.strftime("%Y-%m-%d")
         doc_id = f"{class_id}_{student_id}_{today_str}"
 
-        # Check if an attendance record already exists
+        # Check if attendance record already exists
         attendance_doc = db.collection("attendance").document(doc_id).get()
         if attendance_doc.exists:
             return jsonify({"status": "already_marked", "message": "Attendance already recorded today."}), 200
 
-        # Retrieve class document to fetch the schedule
+        # Retrieve class document to fetch the class schedule
         class_doc = db.collection("classes").document(class_id).get()
         if not class_doc.exists:
             return jsonify({"status": "error", "message": "Class not found"}), 404
@@ -170,7 +169,7 @@ def face_recognition():
             return jsonify({"status": "fail", "message": error_msg}), 400
 
         print("Computed attendance status:", status)
-
+        # Create attendance record document in Firebase
         attendance_record = {
             "studentID": student_id,
             "classID": class_id,
@@ -178,7 +177,7 @@ def face_recognition():
             "status": status,
         }
         db.collection("attendance").document(doc_id).set(attendance_record)
-
+        # Data from successful scan
         return jsonify({
             "status": "success",
             "recognized_student": student_id,
@@ -191,7 +190,7 @@ def face_recognition():
         return jsonify({"status": "error", "message": str(e)}), 500
 
     finally:
-        # Clean up temporary files.
+        # Clean up temporary files that were created
         if os.path.exists(temp_captured_path):
             os.remove(temp_captured_path)
         if os.path.exists(temp_known_path):
