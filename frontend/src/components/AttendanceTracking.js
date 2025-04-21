@@ -1,3 +1,6 @@
+// This is currently unused is not being used by the system
+// It's implementation is being considered for capstone II
+
 import React from "react";
 import { Link } from "react-router-dom";
 

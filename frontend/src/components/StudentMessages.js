@@ -1,3 +1,5 @@
+// This part of the student pages is incomplete and will be completed during capstone II since it is not a core functionality of the system
+
 import React from "react";
 import { Link } from "react-router-dom";
 
@@ -29,7 +31,7 @@ const StudentMessages = () => {
         </nav>
       </aside>
 
-      {/* Main Content */}
+      {/* Message List */}
       <main className="flex-1 p-8">
         <h1 className="text-3xl font-bold mb-6">Messages</h1>
         <ul className="space-y-4">

@@ -1,3 +1,6 @@
+// The teacher's individual messages page is currently hardcoded and incomplete, but shows what the page will look like
+// It will be completed in capstone II
+
 import React from "react";
 import { Link } from "react-router-dom";
 

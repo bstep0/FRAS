@@ -5,9 +5,9 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 
 const StudentClassView = () => {
   const { classId } = useParams();
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [attendanceRecords, setAttendanceRecords] = useState([]); // Attendance records
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth()); // Current month index 
+  const [selectedDate, setSelectedDate] = useState(null); // Selected date for details view
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -15,7 +15,8 @@ const StudentClassView = () => {
       if (!user) return;
 
       try {
-        const usersRef = collection(db, "users");
+        // Fetch user information based on email
+        const usersRef = collection(db, "users"); 
         const userQuery = query(usersRef, where("email", "==", user.email));
         const userSnapshot = await getDocs(userQuery);
 
@@ -64,6 +65,7 @@ const StudentClassView = () => {
     return record ? record.status : "Unknown";
   };
 
+  // Generates the calendar for the current month and fills in the previous and next month days to complete the grid. 
   const generateCalendarDays = () => {
     const year = new Date().getFullYear();
     const firstDayOfMonth = new Date(year, currentMonth, 1);
@@ -73,6 +75,7 @@ const StudentClassView = () => {
     const startDayOfWeek = firstDayOfMonth.getDay();
     const daysInMonth = lastDayOfMonth.getDate();
 
+    // Include days from the previous month
     const prevMonthLastDay = new Date(year, currentMonth, 0).getDate();
     for (let i = startDayOfWeek - 1; i >= 0; i--) {
       const date = new Date(year, currentMonth - 1, prevMonthLastDay - i);
@@ -83,7 +86,7 @@ const StudentClassView = () => {
       });
     }
 
-
+    // Current month days
     for (let i = 1; i <= daysInMonth; i++) {
       const date = new Date(year, currentMonth, i);
       days.push({
@@ -93,7 +96,7 @@ const StudentClassView = () => {
       });
     }
 
- 
+    // Include days from the next month
     const remaining = 42 - days.length; 
     for (let i = 1; i <= remaining; i++) {
       const date = new Date(year, currentMonth + 1, i);
@@ -159,11 +162,11 @@ const StudentClassView = () => {
         </nav>
       </aside>
 
-      {/* Main Content */}
+      {/* Main */}
       <main className="flex-1 p-8">
         <h1 className="text-3xl font-bold mb-6">Attendance for {classId}</h1>
 
-        {/* Month Navigation */}
+        {/* Month Nav Buttons */}
         <div className="flex items-center justify-center mb-4 space-x-2">
           <button
             onClick={handlePrevMonth}
@@ -195,7 +198,7 @@ const StudentClassView = () => {
             <div>Sat</div>
           </div>
 
-          {/* Render Full Calendar */}
+          {/* Full Calendar */}
           <div className="grid grid-cols-7 gap-2">
             {days.map((dayObj, idx) => {
               const { date, isCurrentMonth, status } = dayObj;
@@ -233,7 +236,7 @@ const StudentClassView = () => {
           </div>
         </div>
 
-        {/* Selected Date Details */}
+        {/* Date Details */}
         {selectedDate && (
           <div className="mt-6 p-4 bg-white rounded-lg shadow">
             <h3 className="text-xl font-semibold mb-2">

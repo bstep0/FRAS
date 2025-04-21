@@ -5,9 +5,9 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { collection, query, where, getDocs } from "firebase/firestore";
 
 const LoginPage = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState(null);
+  const [email, setEmail] = useState(""); // User email
+  const [password, setPassword] = useState(""); // User password
+  const [error, setError] = useState(null); // Error message
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -16,12 +16,12 @@ const LoginPage = () => {
     try {
       console.log("Attempting to log in:", email);
 
-      // Sign in the user
+      // Authenticate user
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       console.log("Signed in as:", user.email);
 
-      // Query Firestore to find the user by email
+      // Look up user in Firestore to get role
       const usersRef = collection(db, "users");
       const q = query(usersRef, where("email", "==", email));
       const querySnapshot = await getDocs(q);
@@ -60,6 +60,7 @@ const LoginPage = () => {
         <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
         {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
         <form onSubmit={handleLogin}>
+          {/* Email field */}
           <div className="mb-4">
             <label className="block mb-1 font-semibold">Email</label>
             <input
@@ -70,6 +71,7 @@ const LoginPage = () => {
               required
             />
           </div>
+          {/* Password field */}
           <div className="mb-4">
             <label className="block mb-1 font-semibold">Password</label>
             <input
@@ -80,7 +82,8 @@ const LoginPage = () => {
               required
             />
           </div>
-          <button type="submit" className="w-full bg-blue-500 text-white py-2 rounded">Login</button>
+          {/* Login button */}
+          <button type="submit" className="w-full bg-blue-500 text-white py-2 rounded">Login</button> 
         </form>
       </div>
     </div>

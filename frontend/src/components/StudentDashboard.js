@@ -11,7 +11,8 @@ const StudentDashboard = () => {
 
   const [showScanFlow, setShowScanFlow] = useState(false);
   const [selectedClass, setSelectedClass] = useState("");
-
+  
+  // Load student classes
   useEffect(() => {
     const fetchClasses = async () => {
       if (!user) return;
@@ -41,7 +42,8 @@ const StudentDashboard = () => {
           const classSnap = await getDoc(classRef);
           if (classSnap.exists()) {
             const classData = classSnap.data();
-
+            
+            // Fetch teacher name
             let teacherName = "";
             const teacherId = classData.teacher;
             if (teacherId) {
@@ -80,6 +82,7 @@ const StudentDashboard = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
+      {/* Sidebar */}
       <aside className="w-64 bg-white p-6 border-r min-h-screen">
         <img src="/logo.png" alt="Face Recognition" className="w-24 mx-auto mb-6" />
         <h2 className="text-xl font-semibold mb-6">Attendance System</h2>
@@ -103,7 +106,7 @@ const StudentDashboard = () => {
           </ul>
         </nav>
       </aside>
-
+      {/* Main Content */}
       <main className="flex-1 p-8">
         <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
         {/* Attendance History Card */}

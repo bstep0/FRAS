@@ -1,6 +1,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
+// This page contains the very basic code for the admin dashboard. It contains a sidebar with a link to the user management page. The sidebar is styled using Tailwind CSS classes
+// The main content area is currently empty and will be completed in capstone II
+
 const AdminDashboard = () => {
   return (
     <div className="flex min-h-screen">

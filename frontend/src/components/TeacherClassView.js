@@ -1,3 +1,6 @@
+// The teacher's individual class view page is currently hardcoded and incomplete, but shows what the page will look like
+// It will be completed in capstone II
+
 import React, { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ClassAttendanceChart from "./ClassAttendanceChart";

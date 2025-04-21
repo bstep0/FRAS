@@ -4,9 +4,9 @@ import { collection, query, where, getDocs, doc, getDoc } from "firebase/firesto
 import { Link } from "react-router-dom";
 
 const StudentClasses = () => {
-  const [classes, setClasses] = useState([]);
+  const [classes, setClasses] = useState([]); // List of classes
+  const [studentId, setStudentId] = useState(""); // Student ID
   const user = auth.currentUser;
-
   const [teacherNameCache, setTeacherNameCache] = useState({});
 
   useEffect(() => {
@@ -14,6 +14,7 @@ const StudentClasses = () => {
       if (!user) return;
 
       try {
+      {/* Find the student document by email */}
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("email", "==", user.email));
         const querySnapshot = await getDocs(q);
@@ -33,6 +34,7 @@ const StudentClasses = () => {
         }
 
         let fetchedClasses = [];
+        {/* For each classID, pull class data & teacher name */}
         for (let classId of enrolledClassIds) {
           const classRef = doc(db, "classes", classId);
           const classSnap = await getDoc(classRef);
@@ -83,6 +85,7 @@ const StudentClasses = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
+      {/* Sidebar navigation */}
       <aside className="w-64 bg-white p-6 border-r min-h-screen">
         <img src="/logo.png" alt="Face Recognition Attendance" className="w-24 mx-auto mb-6" />
         <h2 className="text-xl font-semibold mb-6">Dashboard</h2>
@@ -101,6 +104,7 @@ const StudentClasses = () => {
         </nav>
       </aside>
 
+      {/* Class list */}
       <main className="flex-1 p-8">
         <h1 className="text-3xl font-bold mb-6">My Classes</h1>
         <ul className="space-y-4">
