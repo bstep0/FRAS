@@ -117,9 +117,56 @@ Manual rechecks now gatekeep each face scan for up to **45 minutes**. The back
 2. **Show in-progress UI** while a user’s most recent record for the day is pending; the backend response includes `pending: true` and `recheck_due_at` for convenience.
 3. **Only mark attendance complete** once staff (or an automated job) updates the document’s `status` and clears the `isPending` flag.
 
+## Firestore Notifications Schema
+
+Notifications are fanned out to banners, toasts, and inbox entries. Each document captures the common metadata along with a `surfaceTargets` list so clients know which surfaces should render the message.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `userId` | `string` | Primary identifier for the targeted user (Firebase Auth UID or the `users` doc ID). |
+| `userEmail` | `string` | Lowercased email address for the user; stored to support security rules when the doc ID is not the Auth UID. |
+| `targets` | `array<string>` | All identifiers (UIDs and emails) authorized to read/update the notification. |
+| `type` | `string` | Machine-readable notification category (e.g., `class-start-reminder`, `attendance-risk`). |
+| `channel` | `string` | Immediate delivery surface for the document (`banner`, `toast`, or `inbox`). |
+| `surfaceTargets` | `array<string>` | All surfaces that should ultimately display the event. Each surface gets its own document today. |
+| `title` / `message` | `string` | User-facing content used by the UI components. |
+| `tone` | `string` | Semantic tone for styling (`info`, `success`, `warning`, `error`). |
+| `actionLabel` / `actionHref` | `string` | Optional CTA metadata for deep links. |
+| `payload` | `map` | Structured payload (class IDs, attendance record IDs, counts, etc.) for client routing. |
+| `toast` / `banner` | `map` | Surface-specific display hints (e.g., toast duration, banner persistence). |
+| `read` | `boolean` | Set to `true` once the notification has been acknowledged. |
+| `dismissedSurfaces` | `map` | Tracks per-surface dismissals with server timestamps. |
+| `acknowledgedAt` | `timestamp` | Populated when the user confirms the notification via the callable endpoint. |
+| `dedupeKey` | `string` | Hash combining the event, surface, and user to prevent duplicate delivery. |
+| `createdAt` / `updatedAt` | `server timestamp` | Audit timestamps used for ordering and optimistic concurrency. |
+
+Use the provided callable functions (`acknowledgeNotification`, `dismissNotificationSurface`) to update read state or dismissals without elevating client privileges.
+
 ---
 
 ## Deployment
+
+### Cloud Functions & Scheduling
+
+The Firebase Functions project (see `/frontend/functions`) includes three production triggers:
+
+| Function | Trigger | Purpose |
+|----------|---------|---------|
+| `scheduleClassStartReminders` | Pub/Sub scheduler (`* * * * *`, Central Time) | Sends toast + inbox reminders to students when a class begins within five minutes. |
+| `attendanceWriteHandler` | Firestore `attendance/{recordId}` writes | Emits absence risk alerts, and schedules decision-result jobs when a record is created in the `pending` state. |
+| `attendanceDecisionQueue` | Cloud Tasks queue | Runs ~30 minutes after the pending record is created to deliver the final decision (banner/inbox for absences, toast/inbox otherwise). |
+
+Deploy and test the functions from the `frontend/functions` directory:
+
+```bash
+cd frontend/functions
+npm install
+npm run build
+npm test  # runs the unit suite covering the notification flows
+firebase deploy --only functions
+```
+
+The scheduled task and task queue are provisioned automatically during deployment; no manual Scheduler or Cloud Tasks configuration is required beyond Firebase project setup.
 
 ### Backend → Render
 1. **Create a new Web Service** in Render.  
