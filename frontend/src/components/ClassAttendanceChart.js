@@ -8,12 +8,18 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 // It is featured on the Teacher's class view pages for their classes
 // This will be completed and implemented completely in capstone II
 
-const ClassAttendanceChart = () => {
+const ClassAttendanceChart = ({ attendanceSummary }) => {
+  const presentCount = attendanceSummary?.Present ?? 0;
+  const absentCount = attendanceSummary?.Absent ?? 0;
+  const lateCount = attendanceSummary?.Late ?? 0;
+
+  const total = presentCount + absentCount + lateCount;
+
   const data = {
     labels: ["Present", "Absent", "Late"],
     datasets: [
       {
-        data: [87, 10, 3], 
+        data: [presentCount, absentCount, lateCount],
         backgroundColor: ["#4CAF50", "#F44336", "#FFC107"],
         borderWidth: 2,
         hoverOffset: 5,
@@ -40,9 +46,17 @@ const ClassAttendanceChart = () => {
   return (
     <div className="flex justify-center items-center w-full">
       <div className="bg-white p-6 rounded-lg shadow-md w-80">
-        <div className="h-64">
-          <Pie data={data} options={options} />
-        </div>
+        {total > 0 ? (
+          <div className="h-64">
+            <Pie data={data} options={options} />
+          </div>
+        ) : (
+          <div className="flex h-64 items-center justify-center text-center">
+            <p className="text-sm text-gray-500">
+              Attendance data will appear here once records are available.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
