@@ -11,6 +11,7 @@ __pycache__/
 config.py
 instance/
 firebase-adminsdk.json
+front/firebaseConfig.js
 frontend/src/firebaseConfig.js
 backend/firebase/firebase_credentials.json
 
