@@ -2,31 +2,48 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { auth, db } from "../firebaseConfig";
 import { collection, query, where, getDocs } from "firebase/firestore";
+import StudentLayout from "./StudentLayout";
+import { useNotifications } from "../context/NotificationsContext";
 
 const StudentClassView = () => {
   const { classId } = useParams();
-  const [attendanceRecords, setAttendanceRecords] = useState([]); // Attendance records
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth()); // Current month index 
-  const [selectedDate, setSelectedDate] = useState(null); // Selected date for details view
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const { pushToast } = useNotifications();
   const user = auth.currentUser;
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchAttendanceRecords = async () => {
-      if (!user) return;
+      if (!user) {
+        if (isMounted) {
+          setAttendanceRecords([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      setIsLoading(true);
 
       try {
-        // Fetch user information based on email
-        const usersRef = collection(db, "users"); 
+        const usersRef = collection(db, "users");
         const userQuery = query(usersRef, where("email", "==", user.email));
         const userSnapshot = await getDocs(userQuery);
 
+        if (!isMounted) return;
+
         if (userSnapshot.empty) {
           console.warn("No user doc found for email:", user.email);
+          setAttendanceRecords([]);
+          setIsLoading(false);
           return;
         }
 
         const studentDoc = userSnapshot.docs[0];
-        const studentId = studentDoc.id; 
+        const studentId = studentDoc.id;
 
         const attendanceRef = collection(db, "attendance");
         const attendanceQuery = query(
@@ -36,24 +53,42 @@ const StudentClassView = () => {
         );
         const attendanceSnapshot = await getDocs(attendanceQuery);
 
-        let records = [];
-        attendanceSnapshot.forEach((doc) => {
-          records.push(doc.data());
+        if (!isMounted) return;
+
+        const records = [];
+        attendanceSnapshot.forEach((docSnapshot) => {
+          records.push(docSnapshot.data());
         });
 
         setAttendanceRecords(records);
       } catch (error) {
         console.error("Error fetching attendance records:", error);
+        pushToast({
+          tone: "error",
+          title: "Attendance unavailable",
+          message: "We couldn't retrieve your attendance records. Please try again soon.",
+        });
+        if (isMounted) {
+          setAttendanceRecords([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchAttendanceRecords();
-  }, [user, classId]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user, classId, pushToast]);
 
   const getAttendanceStatus = (date) => {
-    const record = attendanceRecords.find((r) => {
-      if (!r.date || !r.date.toDate) return false; 
-      const recordDate = r.date.toDate(); 
+    const record = attendanceRecords.find((recordItem) => {
+      if (!recordItem.date || !recordItem.date.toDate) return false;
+      const recordDate = recordItem.date.toDate();
 
       return (
         recordDate.getFullYear() === date.getFullYear() &&
@@ -65,7 +100,6 @@ const StudentClassView = () => {
     return record ? record.status : "Unknown";
   };
 
-  // Generates the calendar for the current month and fills in the previous and next month days to complete the grid. 
   const generateCalendarDays = () => {
     const year = new Date().getFullYear();
     const firstDayOfMonth = new Date(year, currentMonth, 1);
@@ -75,9 +109,8 @@ const StudentClassView = () => {
     const startDayOfWeek = firstDayOfMonth.getDay();
     const daysInMonth = lastDayOfMonth.getDate();
 
-    // Include days from the previous month
     const prevMonthLastDay = new Date(year, currentMonth, 0).getDate();
-    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+    for (let i = startDayOfWeek - 1; i >= 0; i -= 1) {
       const date = new Date(year, currentMonth - 1, prevMonthLastDay - i);
       days.push({
         date,
@@ -86,8 +119,7 @@ const StudentClassView = () => {
       });
     }
 
-    // Current month days
-    for (let i = 1; i <= daysInMonth; i++) {
+    for (let i = 1; i <= daysInMonth; i += 1) {
       const date = new Date(year, currentMonth, i);
       days.push({
         date,
@@ -96,9 +128,8 @@ const StudentClassView = () => {
       });
     }
 
-    // Include days from the next month
-    const remaining = 42 - days.length; 
-    for (let i = 1; i <= remaining; i++) {
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i += 1) {
       const date = new Date(year, currentMonth + 1, i);
       days.push({
         date,
@@ -132,63 +163,37 @@ const StudentClassView = () => {
   const days = generateCalendarDays();
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white p-6 border-r min-h-screen">
-        <img
-          src="/logo.png"
-          alt="Face Recognition Attendance"
-          className="w-24 mx-auto mb-6"
-        />
-        <h2 className="text-xl font-semibold mb-6">Attendance System</h2>
-        <nav>
-          <ul>
-            <li className="mb-4">
-              <Link to="/student" className="flex items-center p-2 hover:bg-gray-200 rounded">
-                📌 Dashboard
-              </Link>
-            </li>
-            <li className="mb-4">
-              <Link to="/student/classes" className="flex items-center p-2 hover:bg-gray-200 rounded">
-                📚 My Classes
-              </Link>
-            </li>
-            <li className="mb-4">
-              <Link to="/student/messages" className="flex items-center p-2 hover:bg-gray-200 rounded">
-                💬 Messages
-              </Link>
-            </li>
-          </ul>
-        </nav>
-      </aside>
-
-      {/* Main */}
-      <main className="flex-1 p-8">
-        <h1 className="text-3xl font-bold mb-6">Attendance for {classId}</h1>
-
-        {/* Month Nav Buttons */}
-        <div className="flex items-center justify-center mb-4 space-x-2">
-          <button
-            onClick={handlePrevMonth}
-            className="bg-blue-600 text-white text-sm px-2 py-1 rounded hover:scale-105 transition-transform"
-          >
-            Previous
-          </button>
-          <h2 className="text-xl font-semibold">{monthYearText}</h2>
-          <button
-            onClick={handleNextMonth}
-            className="bg-blue-600 text-white text-sm px-2 py-1 rounded hover:scale-105 transition-transform"
-          >
-            Next
-          </button>
+    <StudentLayout title={`Attendance for ${classId}`}>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Link to="/student/classes" className="text-sm font-medium text-blue-600 hover:text-blue-800">
+            ← Back to classes
+          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Next
+            </button>
+          </div>
         </div>
 
-        {/* Calendar */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-2xl font-semibold mb-4">Attendance Calendar</h2>
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <h2 className="text-2xl font-semibold text-gray-900">Attendance Calendar</h2>
+            <p className="text-sm text-gray-600">{monthYearText}</p>
+          </div>
 
-          {/* Days of the Week */}
-          <div className="grid grid-cols-7 gap-2 mb-2 text-center font-bold text-gray-600">
+          <div className="mt-6 grid grid-cols-7 gap-2 text-center text-sm font-semibold text-gray-600">
             <div>Sun</div>
             <div>Mon</div>
             <div>Tue</div>
@@ -198,55 +203,58 @@ const StudentClassView = () => {
             <div>Sat</div>
           </div>
 
-          {/* Full Calendar */}
-          <div className="grid grid-cols-7 gap-2">
+          <div className="mt-2 grid grid-cols-7 gap-2">
             {days.map((dayObj, idx) => {
               const { date, isCurrentMonth, status } = dayObj;
-
-              let symbol = "⬜";
+              let statusLabel = "⬜";
               let textColor = isCurrentMonth ? "text-gray-700" : "text-gray-400";
 
               if (status === "Present") {
-                symbol = "Present ✅";
+                statusLabel = "Present ✅";
                 textColor = isCurrentMonth ? "text-green-600" : "text-green-400";
               } else if (status === "Absent") {
-                symbol = "Absent ❌";
+                statusLabel = "Absent ❌";
                 textColor = isCurrentMonth ? "text-red-600" : "text-red-400";
               } else if (status === "Late") {
-                symbol = "Late ⚠️";
+                statusLabel = "Late ⚠️";
                 textColor = isCurrentMonth ? "text-yellow-500" : "text-yellow-300";
               }
 
               const isSelected =
-                selectedDate && selectedDate.date.toDateString() === date.toDateString()
+                selectedDate &&
+                selectedDate.date.toDateString() === date.toDateString()
                   ? "border-2 border-blue-400"
                   : "";
 
               return (
-                <div
-                  key={idx}
+                <button
+                  key={`${date.toISOString()}-${idx}`}
+                  type="button"
                   onClick={() => handleDateClick({ date, status })}
-                  className={`p-4 border rounded-lg text-center cursor-pointer transition-transform hover:scale-105 hover:bg-gray-100 ${textColor} ${isSelected}`}
+                  className={`flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm font-medium hover:bg-gray-100 ${textColor} ${isSelected}`}
                 >
-                  <p className="text-gray-700">{date.getDate()}</p>
-                  <p className="text-2xl">{symbol}</p>
-                </div>
+                  <span>{date.getDate()}</span>
+                  <span className="mt-1 text-xs">{statusLabel}</span>
+                </button>
               );
             })}
           </div>
-        </div>
 
-        {/* Date Details */}
-        {selectedDate && (
-          <div className="mt-6 p-4 bg-white rounded-lg shadow">
-            <h3 className="text-xl font-semibold mb-2">
+          {isLoading ? (
+            <p className="mt-4 text-sm text-gray-500">Loading attendance records…</p>
+          ) : null}
+        </section>
+
+        {selectedDate ? (
+          <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-gray-900">
               Details for {selectedDate.date.toLocaleDateString("en-US")}
             </h3>
-            <p>Status: {selectedDate.status}</p>
-          </div>
-        )}
-      </main>
-    </div>
+            <p className="mt-2 text-sm text-gray-600">Status: {selectedDate.status}</p>
+          </section>
+        ) : null}
+      </div>
+    </StudentLayout>
   );
 };
 

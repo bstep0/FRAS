@@ -1,26 +1,40 @@
-import React, { useState, useEffect } from "react";
-import { auth, db } from "../firebaseConfig";
+import React, { useEffect, useState } from "react";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { Link } from "react-router-dom";
+import { auth, db } from "../firebaseConfig";
+import StudentLayout from "./StudentLayout";
+import { useNotifications } from "../context/NotificationsContext";
 
 const StudentClasses = () => {
-  const [classes, setClasses] = useState([]); // List of classes
-  const [studentId, setStudentId] = useState(""); // Student ID
+  const [classes, setClasses] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { pushToast } = useNotifications();
   const user = auth.currentUser;
-  const [teacherNameCache, setTeacherNameCache] = useState({});
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchClasses = async () => {
-      if (!user) return;
+      if (!user) {
+        if (isMounted) {
+          setClasses([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      setIsLoading(true);
 
       try {
-      {/* Find the student document by email */}
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("email", "==", user.email));
         const querySnapshot = await getDocs(q);
 
+        if (!isMounted) return;
+
         if (querySnapshot.empty) {
           setClasses([]);
+          setIsLoading(false);
           return;
         }
 
@@ -28,104 +42,121 @@ const StudentClasses = () => {
         const studentData = studentDoc.data();
         const enrolledClassIds = studentData.classes || [];
 
-        if (enrolledClassIds.length === 0) {
+        if (!enrolledClassIds.length) {
           setClasses([]);
+          setIsLoading(false);
           return;
         }
 
-        let fetchedClasses = [];
-        {/* For each classID, pull class data & teacher name */}
-        for (let classId of enrolledClassIds) {
-          const classRef = doc(db, "classes", classId);
-          const classSnap = await getDoc(classRef);
+        const fetchedClasses = await Promise.all(
+          enrolledClassIds.map(async (classId) => {
+            try {
+              const classRef = doc(db, "classes", classId);
+              const classSnap = await getDoc(classRef);
 
-          if (!classSnap.exists()) {
-            continue;
-          }
+              if (!classSnap.exists()) {
+                return null;
+              }
 
-          let classData = classSnap.data();
-          let teacherId = classData.teacher;
-          let teacherName = "";
+              const classData = classSnap.data();
+              let teacherName = "";
+              const teacherId = classData.teacher;
 
-          if (teacherNameCache[teacherId]) {
-            teacherName = teacherNameCache[teacherId];
-          } else {
-            const teacherRef = doc(db, "users", teacherId);
-            const teacherSnap = await getDoc(teacherRef);
+              if (teacherId) {
+                try {
+                  const teacherRef = doc(db, "users", teacherId);
+                  const teacherSnap = await getDoc(teacherRef);
+                  if (teacherSnap.exists()) {
+                    const teacherData = teacherSnap.data();
+                    teacherName = `${teacherData.fname} ${teacherData.lname}`;
+                  } else {
+                    teacherName = teacherId;
+                  }
+                } catch (error) {
+                  console.error("Error fetching teacher information:", error);
+                  teacherName = teacherId;
+                }
+              }
 
-            if (teacherSnap.exists()) {
-              const teacherData = teacherSnap.data();
-              teacherName = `${teacherData.fname} ${teacherData.lname}`;
-              setTeacherNameCache((prev) => ({
-                ...prev,
-                [teacherId]: teacherName
-              }));
-            } else {
-              teacherName = teacherId; 
+              return {
+                id: classSnap.id,
+                name: classData.name,
+                teacher: teacherName,
+                room: classData.room,
+                schedule: classData.schedule,
+              };
+            } catch (error) {
+              console.error(`Failed to fetch class ${classId}`, error);
+              return null;
             }
-          }
+          })
+        );
 
-          fetchedClasses.push({
-            id: classSnap.id,
-            name: classData.name,
-            teacher: teacherName,
-            room: classData.room,
-            schedule: classData.schedule
-          });
-        }
+        if (!isMounted) return;
 
-        setClasses(fetchedClasses);
+        setClasses(fetchedClasses.filter(Boolean));
       } catch (error) {
         console.error("Error fetching classes:", error);
+        pushToast({
+          tone: "error",
+          title: "Unable to load classes",
+          message: "We could not load your classes right now. Please try again shortly.",
+        });
+        if (isMounted) {
+          setClasses([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchClasses();
-  }, [user]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user, pushToast]);
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar navigation */}
-      <aside className="w-64 bg-white p-6 border-r min-h-screen">
-        <img src="/logo.png" alt="Face Recognition Attendance" className="w-24 mx-auto mb-6" />
-        <h2 className="text-xl font-semibold mb-6">Dashboard</h2>
-        <nav>
-          <ul>
-            <li className="mb-4">
-              <Link to="/student" className="flex items-center p-2 hover:bg-gray-200 rounded">📌 Dashboard</Link>
-            </li>
-            <li className="mb-4">
-              <Link to="/student/classes" className="flex items-center p-2 hover:bg-gray-200 rounded">📚 My Classes</Link>
-            </li>
-            <li className="mb-4">
-              <Link to="/student/messages" className="flex items-center p-2 hover:bg-gray-200 rounded">💬 Messages</Link>
-            </li>
-          </ul>
-        </nav>
-      </aside>
-
-      {/* Class list */}
-      <main className="flex-1 p-8">
-        <h1 className="text-3xl font-bold mb-6">My Classes</h1>
-        <ul className="space-y-4">
-          {classes.length > 0 ? (
+    <StudentLayout title="My Classes">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-gray-900">Courses</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          Access details about each course and monitor your attendance performance.
+        </p>
+        <div className="mt-6 space-y-4">
+          {isLoading ? (
+            <p className="text-sm text-gray-500">Loading your classes…</p>
+          ) : classes.length ? (
             classes.map((classItem) => (
-              <li key={classItem.id} className="bg-white p-4 rounded-lg shadow flex items-center justify-between">
+              <div
+                key={classItem.id}
+                className="flex flex-col gap-2 rounded-md border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700 shadow-sm md:flex-row md:items-center md:justify-between"
+              >
                 <div>
-                  <h2 className="text-lg font-semibold">{classItem.id} - {classItem.name}</h2>
-                  <p className="text-gray-600">Teacher: {classItem.teacher}</p>
-                  <p className="text-gray-600">Room: {classItem.room}</p>
-                  <p className="text-gray-600">Scheduled Time: {classItem.schedule}</p>
+                  <p className="text-base font-semibold text-gray-900">
+                    {classItem.id} - {classItem.name}
+                  </p>
+                  <p>Teacher: {classItem.teacher || "TBD"}</p>
+                  <p>Room: {classItem.room || "TBD"}</p>
+                  <p>Scheduled Time: {classItem.schedule || "See syllabus"}</p>
                 </div>
-                <Link to={`/student/classes/${classItem.id}`} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">View</Link>
-              </li>
+                <Link
+                  to={`/student/classes/${classItem.id}`}
+                  className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  View class
+                </Link>
+              </div>
             ))
           ) : (
-            <p>No enrolled classes found.</p>
+            <p className="text-sm text-gray-500">No enrolled classes found.</p>
           )}
-        </ul>
-      </main>
-    </div>
+        </div>
+      </div>
+    </StudentLayout>
   );
 };
 
