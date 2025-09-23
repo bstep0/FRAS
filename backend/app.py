@@ -311,8 +311,24 @@ def _process_face_recognition_request():
         doc_id = f"{class_id}_{student_id}_{today_str}"
 
         # Check if attendance record already exists
-        attendance_doc = db.collection("attendance").document(doc_id).get()
+        attendance_doc_ref = db.collection("attendance").document(doc_id)
+        attendance_doc = attendance_doc_ref.get()
         if attendance_doc.exists:
+            existing_record = attendance_doc.to_dict() or {}
+            if existing_record.get("status") == "pending":
+                existing_recheck_due = existing_record.get("pendingRecheckAt")
+                if isinstance(existing_recheck_due, datetime.datetime):
+                    existing_recheck_due_iso = existing_recheck_due.isoformat()
+                else:
+                    existing_recheck_due_iso = None
+                return jsonify({
+                    "status": "pending",
+                    "message": "Attendance scan is awaiting manual verification.",
+                    "recognized_student": student_id,
+                    "pending": True,
+                    "proposed_attendance_status": existing_record.get("proposedStatus"),
+                    "recheck_due_at": existing_recheck_due_iso,
+                }), 202
             return jsonify({"status": "already_marked", "message": "Attendance already recorded today."}), 200
 
         # Retrieve class document to fetch the class schedule
@@ -344,22 +360,48 @@ def _process_face_recognition_request():
             return jsonify({"status": "fail", "message": error_msg}), 400
 
         print("Computed attendance status:", status)
-        # Create attendance record document in Firebase
+
+        network_evidence = {
+            "remoteAddr": request.remote_addr,
+            "xForwardedFor": request.headers.get("X-Forwarded-For"),
+            "xRealIp": request.headers.get("X-Real-IP"),
+            "userAgent": request.headers.get("User-Agent"),
+            "forwardedProto": request.headers.get("X-Forwarded-Proto"),
+            "requestId": request.headers.get("X-Request-Id"),
+        }
+
+        pending_recheck_at = now_central + datetime.timedelta(minutes=45)
+
+        # Create attendance record document in Firebase marked as pending review
         attendance_record = {
             "studentID": student_id,
             "classID": class_id,
             "date": now_central,
-            "status": status,
+            "status": "pending",
+            "isPending": True,
+            "proposedStatus": status,
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+            "pendingRecheckAt": pending_recheck_at,
+            "networkEvidence": network_evidence,
+            "verification": {
+                "distance": verify_result.get("distance"),
+                "threshold": verify_result.get("max_threshold_to_verify"),
+                "model": "VGG-Face",
+            },
         }
-        db.collection("attendance").document(doc_id).set(attendance_record)
-        # Data from successful scan
-        return jsonify({
-            "status": "success",
+        attendance_doc_ref.set(attendance_record)
+
+        response_payload = {
+            "status": "pending",
             "recognized_student": student_id,
-            "attendance_status": status,
-            "distance": verify_result.get("distance"),
-            "threshold": verify_result.get("max_threshold_to_verify")
-        }), 200
+            "pending": True,
+            "proposed_attendance_status": status,
+            "recheck_due_at": pending_recheck_at.isoformat(),
+        }
+
+        # Inform the frontend that the scan is pending manual follow-up
+        return jsonify(response_payload), 202
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
