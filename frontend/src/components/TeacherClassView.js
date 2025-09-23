@@ -58,14 +58,32 @@ const formatRecordDate = (value) => {
 
 const resolveStudentName = (studentData, fallbackName, fallbackId) => {
   if (studentData) {
-    const { displayName, fullName, name, firstName, lastName, email } = studentData;
+    const {
+      displayName,
+      fullName,
+      name,
+      firstName,
+      lastName,
+      fname,
+      lname,
+      email,
+    } = studentData;
 
     if (displayName) return displayName;
     if (fullName) return fullName;
     if (name) return name;
 
-    const combined = [firstName, lastName].filter(Boolean).join(" ").trim();
-    if (combined) return combined;
+    const nameCandidates = [
+      [firstName, lastName],
+      [fname, lname],
+      [firstName || fname, lastName || lname],
+    ];
+
+    for (const parts of nameCandidates) {
+      const combined = parts.filter(Boolean).join(" ").trim();
+      if (combined) return combined;
+    }
+
     if (email) return email;
   }
 
