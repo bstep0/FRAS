@@ -25,8 +25,17 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+let analytics;
+if (typeof window !== "undefined") {
+  try {
+    analytics = getAnalytics(app);
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Firebase analytics is not available in this environment.");
+    }
+  }
+}
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-export { db, auth, collection, doc, getDocs};
+export { db, auth, collection, doc, getDocs };

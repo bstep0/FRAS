@@ -7,9 +7,28 @@ jest.mock(
     BrowserRouter: ({ children }) => <div>{children}</div>,
     Routes: ({ children }) => <>{children}</>,
     Route: ({ element }) => <>{element}</>,
+    Link: ({ children }) => <a>{children}</a>,
+    useLocation: () => ({ pathname: '/' }),
+    useNavigate: () => () => {},
   }),
   { virtual: true }
 );
+
+jest.mock('./context/NotificationsContext', () => ({
+  NotificationsProvider: ({ children }) => <>{children}</>,
+  useNotifications: () => ({
+    notifications: [],
+    loading: false,
+    unreadCount: 0,
+    markAsRead: jest.fn(),
+    markAllAsRead: jest.fn(),
+    bannerNotification: null,
+    dismissBanner: jest.fn(),
+    toastNotification: null,
+    dismissToast: jest.fn(),
+    pushToast: jest.fn(),
+  }),
+}));
 
 jest.mock('./components/AdminDashboard', () => () => <div>Admin Dashboard</div>);
 jest.mock('./components/TeacherDashboard', () => () => <div>Teacher Dashboard</div>);
