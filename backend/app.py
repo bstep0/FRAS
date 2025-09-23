@@ -169,13 +169,18 @@ def finalize_attendance():
 
     record = snapshot.to_dict() or {}
 
-    if record.get("status") != "Pending":
+    record_status = str(record.get("status", "")).lower()
+
+    if record_status != "pending":
         return jsonify({
             "status": "error",
             "message": "Pending attendance record has expired."
         }), 410
 
-    pending_status = record.get("pendingStatus")
+    pending_status = record.get("proposedStatus")
+
+    if pending_status is None:
+        pending_status = record.get("pendingStatus")
 
     if pending_status not in {"Present", "Late"}:
         return jsonify({
@@ -193,8 +198,12 @@ def finalize_attendance():
             "finalizedAt": now_central,
         }
 
-        if "pendingStatus" in record:
-            updates["pendingStatus"] = firestore.DELETE_FIELD
+        for field in ("proposedStatus", "pendingStatus"):
+            if field in record:
+                updates[field] = firestore.DELETE_FIELD
+
+        if "isPending" in record:
+            updates["isPending"] = firestore.DELETE_FIELD
 
         attendance_ref.update(updates)
 
@@ -209,8 +218,12 @@ def finalize_attendance():
         "finalizedAt": now_central,
     }
 
-    if "pendingStatus" in record:
-        updates["pendingStatus"] = firestore.DELETE_FIELD
+    for field in ("proposedStatus", "pendingStatus"):
+        if field in record:
+            updates[field] = firestore.DELETE_FIELD
+
+    if "isPending" in record:
+        updates["isPending"] = firestore.DELETE_FIELD
 
     if "rejectionReason" in record:
         updates["rejectionReason"] = firestore.DELETE_FIELD
