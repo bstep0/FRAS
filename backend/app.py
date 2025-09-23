@@ -1,14 +1,16 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 import base64
 import cv2
 import numpy as np
 import firebase_admin
-from firebase_admin import credentials, firestore, storage
+from firebase_admin import credentials, firestore, storage, auth as firebase_auth
 import datetime
 import ipaddress
 import os
 from deepface import DeepFace
 from zoneinfo import ZoneInfo
+import csv
+import io
 
 from ipaddress import ip_address
 
@@ -42,6 +44,38 @@ bucket = storage.bucket()  # Initialize storage bucket
 
 # Timezone for Central Time
 CENTRAL_TZ = ZoneInfo("America/Chicago")
+
+
+def _to_central_iso(timestamp_like):
+    """Return an ISO 8601 string in Central time for datetime inputs."""
+
+    if isinstance(timestamp_like, datetime.datetime):
+        timestamp = timestamp_like
+    elif isinstance(timestamp_like, datetime.date):
+        timestamp = datetime.datetime.combine(timestamp_like, datetime.time.min)
+    else:
+        return ""
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
+
+    return timestamp.astimezone(CENTRAL_TZ).isoformat()
+
+
+def _to_central_date(timestamp_like):
+    """Return a YYYY-MM-DD string rendered in Central time."""
+
+    if isinstance(timestamp_like, datetime.datetime):
+        target = timestamp_like
+    elif isinstance(timestamp_like, datetime.date):
+        target = datetime.datetime.combine(timestamp_like, datetime.time.min)
+    else:
+        return ""
+
+    if target.tzinfo is None:
+        target = target.replace(tzinfo=datetime.timezone.utc)
+
+    return target.astimezone(CENTRAL_TZ).strftime("%Y-%m-%d")
 
 
 def _load_eaglenet_allowlist():
@@ -145,6 +179,286 @@ def _resolve_record_id(payload):
         return f"{class_id}_{student_id}_{date_str}"
 
     return None
+
+
+def _extract_bearer_token(header_value):
+    if not header_value:
+        return None
+
+    parts = header_value.split()
+    if len(parts) != 2:
+        return None
+
+    scheme, token = parts
+    if scheme.lower() != "bearer":
+        return None
+
+    return token
+
+
+def _load_teacher_profile(decoded_token):
+    """Return the teacher's Firestore document ID and profile dict."""
+
+    teacher_uid = decoded_token.get("uid")
+    teacher_email = decoded_token.get("email")
+
+    users_collection = db.collection("users")
+
+    if teacher_uid:
+        try:
+            doc_ref = users_collection.document(teacher_uid)
+            snapshot = doc_ref.get()
+        except Exception:
+            snapshot = None
+        else:
+            if snapshot and getattr(snapshot, "exists", False):
+                profile = snapshot.to_dict() or {}
+                doc_id = getattr(snapshot, "id", None) or getattr(doc_ref, "id", None) or teacher_uid
+                return doc_id, profile
+
+    if teacher_email:
+        try:
+            query = users_collection.where("email", "==", teacher_email).limit(1)
+            snapshot = next(query.stream(), None)
+        except Exception:
+            snapshot = None
+        else:
+            if snapshot is not None:
+                profile = snapshot.to_dict() or {}
+                doc_id = getattr(snapshot, "id", None) or teacher_uid or teacher_email
+                return doc_id, profile
+
+    return None, {}
+
+
+def _lookup_student_names(student_ids):
+    """Return a mapping of student ID to display name."""
+
+    users_collection = db.collection("users")
+    resolved = {}
+
+    for student_id in student_ids:
+        display_name = ""
+
+        try:
+            candidate_doc = users_collection.document(student_id).get()
+        except Exception:
+            candidate_doc = None
+
+        if candidate_doc and candidate_doc.exists:
+            candidate_data = candidate_doc.to_dict() or {}
+        else:
+            candidate_data = None
+            try:
+                query = users_collection.where("id", "==", student_id).limit(1)
+                candidate_doc = next(query.stream(), None)
+                if candidate_doc is not None:
+                    candidate_data = candidate_doc.to_dict() or {}
+            except Exception:
+                candidate_doc = None
+                candidate_data = None
+
+        if candidate_data:
+            first = str(candidate_data.get("fname", "")).strip()
+            last = str(candidate_data.get("lname", "")).strip()
+            display_name = " ".join(part for part in (first, last) if part)
+            if not display_name:
+                display_name = str(candidate_data.get("displayName", "")) or str(candidate_data.get("name", ""))
+
+        if not display_name:
+            display_name = student_id
+
+        resolved[student_id] = display_name
+
+    return resolved
+
+
+@app.route("/api/attendance/export", methods=["GET"])
+def export_attendance():
+    class_id = (request.args.get("classId") or "").strip()
+    start_date_raw = (request.args.get("startDate") or "").strip()
+    end_date_raw = (request.args.get("endDate") or "").strip()
+
+    if not class_id or not start_date_raw or not end_date_raw:
+        return jsonify({
+            "status": "error",
+            "message": "classId, startDate, and endDate are required query parameters.",
+        }), 400
+
+    try:
+        start_date = datetime.datetime.strptime(start_date_raw, "%Y-%m-%d").date()
+        end_date = datetime.datetime.strptime(end_date_raw, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify({
+            "status": "error",
+            "message": "Dates must be in YYYY-MM-DD format.",
+        }), 400
+
+    if start_date > end_date:
+        return jsonify({
+            "status": "error",
+            "message": "startDate must be on or before endDate.",
+        }), 400
+
+    bearer_token = _extract_bearer_token(request.headers.get("Authorization"))
+    if not bearer_token:
+        return jsonify({
+            "status": "error",
+            "message": "Missing or invalid Authorization header.",
+        }), 401
+
+    try:
+        decoded_token = firebase_auth.verify_id_token(bearer_token)
+    except (firebase_auth.InvalidIdTokenError, firebase_auth.ExpiredIdTokenError, firebase_auth.RevokedIdTokenError, ValueError):
+        return jsonify({
+            "status": "error",
+            "message": "Authentication token is invalid or expired.",
+        }), 401
+    except Exception:
+        return jsonify({
+            "status": "error",
+            "message": "Unable to verify authentication token.",
+        }), 401
+
+    teacher_doc_id, teacher_profile = _load_teacher_profile(decoded_token)
+    if not teacher_doc_id:
+        return jsonify({
+            "status": "error",
+            "message": "Unable to locate teacher profile for the authenticated user.",
+        }), 403
+
+    teacher_role = str(teacher_profile.get("role", "")).lower()
+    if teacher_role != "teacher":
+        return jsonify({
+            "status": "error",
+            "message": "You do not have permission to export attendance records.",
+        }), 403
+
+    teacher_identifiers = {teacher_doc_id}
+    alternate_identifier = teacher_profile.get("id")
+    if alternate_identifier:
+        teacher_identifiers.add(str(alternate_identifier))
+
+    class_doc = db.collection("classes").document(class_id).get()
+    if not class_doc.exists:
+        return jsonify({
+            "status": "error",
+            "message": "Class not found.",
+        }), 404
+
+    class_data = class_doc.to_dict() or {}
+
+    assigned_teachers = set()
+    for key in ("teacher", "teacherId", "teacherID", "teachers"):
+        value = class_data.get(key)
+        if isinstance(value, str):
+            assigned_teachers.add(value)
+        elif isinstance(value, list):
+            assigned_teachers.update(str(item) for item in value if item)
+
+    if assigned_teachers and not (teacher_identifiers & assigned_teachers):
+        return jsonify({
+            "status": "error",
+            "message": "You are not assigned to this class.",
+        }), 403
+
+    if not assigned_teachers:
+        return jsonify({
+            "status": "error",
+            "message": "This class does not have an assigned teacher.",
+        }), 403
+
+    start_dt = datetime.datetime.combine(start_date, datetime.time.min, tzinfo=CENTRAL_TZ)
+    end_dt = datetime.datetime.combine(end_date, datetime.time.max, tzinfo=CENTRAL_TZ)
+
+    try:
+        attendance_query = (
+            db.collection("attendance")
+            .where("classID", "==", class_id)
+            .where("date", ">=", start_dt)
+            .where("date", "<=", end_dt)
+        )
+        attendance_docs = list(attendance_query.stream())
+    except Exception as exc:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to fetch attendance records: {exc}",
+        }), 500
+
+    attendance_records = []
+    student_ids = set()
+    for doc_snapshot in attendance_docs:
+        data = doc_snapshot.to_dict() or {}
+        attendance_records.append(data)
+        student_id = data.get("studentID") or data.get("studentId")
+        if student_id:
+            student_ids.add(str(student_id))
+
+    student_names = _lookup_student_names(student_ids) if student_ids else {}
+
+    def sort_key(record):
+        value = record.get("date")
+        if isinstance(value, datetime.datetime):
+            return value
+        if isinstance(value, datetime.date):
+            return datetime.datetime.combine(value, datetime.time.min)
+        if isinstance(value, str):
+            try:
+                return datetime.datetime.fromisoformat(value)
+            except ValueError:
+                return datetime.datetime.min
+        return datetime.datetime.min
+
+    attendance_records.sort(key=sort_key)
+
+    csv_header = [
+        "studentName",
+        "studentId",
+        "date",
+        "status",
+        "checkInAt",
+        "decidedAt",
+        "decisionMethod",
+    ]
+
+    def row_for_record(record):
+        student_id = str(record.get("studentID") or record.get("studentId") or "")
+        student_name = student_names.get(student_id, student_id)
+        date_value = record.get("date")
+        check_in_value = record.get("checkInAt") or record.get("createdAt") or date_value
+        decided_value = record.get("decidedAt") or record.get("finalizedAt") or record.get("updatedAt")
+        decision_method = record.get("decisionMethod") or record.get("decisionSource") or ""
+
+        return [
+            student_name,
+            student_id,
+            _to_central_date(date_value),
+            record.get("status", ""),
+            _to_central_iso(check_in_value),
+            _to_central_iso(decided_value),
+            decision_method,
+        ]
+
+    def generate():
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(csv_header)
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        for record in attendance_records:
+            writer.writerow(row_for_record(record))
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+    filename = f"attendance-{class_id}-{start_date_raw}-to-{end_date_raw}.csv"
+    response = Response(stream_with_context(generate()), mimetype="text/csv")
+    response.headers["Content-Disposition"] = f"attachment; filename=\"{filename}\""
+    response.headers["Cache-Control"] = "no-store"
+
+    return response
 
 
 @app.route("/api/attendance/finalize", methods=["POST"])
