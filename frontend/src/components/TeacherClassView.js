@@ -198,6 +198,46 @@ const TeacherClassView = () => {
 
   const dateOptions = useMemo(() => generateDateOptions(), [generateDateOptions]);
 
+  const attendanceSummary = useMemo(() => {
+    const summary = { Present: 0, Absent: 0, Late: 0 };
+
+    if (!Array.isArray(attendanceRecords) || attendanceRecords.length === 0) {
+      return summary;
+    }
+
+    attendanceRecords.forEach((record) => {
+      const status =
+        typeof record.status === "string" ? record.status.trim().toLowerCase() : "";
+
+      if (!status) return;
+
+      if (status === "present" || status === "present (remote)") {
+        summary.Present += 1;
+        return;
+      }
+
+      if (status === "late" || status === "tardy") {
+        summary.Late += 1;
+        return;
+      }
+
+      if (status === "absent" || status === "excused" || status === "unexcused") {
+        summary.Absent += 1;
+        return;
+      }
+
+      if (status.includes("present")) {
+        summary.Present += 1;
+      } else if (status.includes("late") || status.includes("tardy")) {
+        summary.Late += 1;
+      } else {
+        summary.Absent += 1;
+      }
+    });
+
+    return summary;
+  }, [attendanceRecords]);
+
   const openModal = (record) => {
     if (!record) return;
 
@@ -393,7 +433,7 @@ const TeacherClassView = () => {
             Review class-wide attendance performance at a glance.
           </p>
           <div className="mt-6 flex justify-start">
-            <ClassAttendanceChart />
+            <ClassAttendanceChart attendanceSummary={attendanceSummary} />
           </div>
         </section>
 
