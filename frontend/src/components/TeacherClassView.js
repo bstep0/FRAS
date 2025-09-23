@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  Timestamp,
 } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig"; // single import (no duplicates)
 import { useNotifications } from "../context/NotificationsContext";
@@ -26,32 +27,51 @@ const formatDateLabel = (date) =>
     day: "numeric",
   });
 
-const formatRecordDate = (value) => {
-  if (!value) return "";
+const coerceToDate = (value) => {
+  if (!value) return null;
 
   if (typeof value.toDate === "function") {
-    return formatDateLabel(value.toDate());
+    const converted = value.toDate();
+    if (!Number.isNaN(converted.getTime())) {
+      return new Date(converted);
+    }
   }
 
   if (value instanceof Date) {
-    return formatDateLabel(value);
+    const converted = new Date(value);
+    if (!Number.isNaN(converted.getTime())) {
+      return converted;
+    }
+    return null;
   }
 
-  if (typeof value === "number" || typeof value === "string") {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return formatDateLabel(parsed);
+  if (typeof value === "number") {
+    const converted = new Date(value);
+    if (!Number.isNaN(converted.getTime())) {
+      return converted;
+    }
+  }
+
+  if (typeof value === "string") {
+    const converted = new Date(value);
+    if (!Number.isNaN(converted.getTime())) {
+      return converted;
     }
   }
 
   if (value?.seconds) {
-    const parsed = new Date(value.seconds * 1000);
-    if (!Number.isNaN(parsed.getTime())) {
-      return formatDateLabel(parsed);
+    const converted = new Date(value.seconds * 1000);
+    if (!Number.isNaN(converted.getTime())) {
+      return converted;
     }
   }
 
-  return "";
+  return null;
+};
+
+const formatRecordDate = (value) => {
+  const parsed = coerceToDate(value);
+  return parsed ? formatDateLabel(parsed) : "";
 };
 
 const resolveStudentName = (studentData, fallbackName, fallbackId) => {
@@ -148,11 +168,14 @@ const TeacherClassView = () => {
           record.studentID
         );
 
+        const dateValue = coerceToDate(record.date);
+
         return {
           ...record,
           student: studentData,
           studentName,
-          formattedDate: formatRecordDate(record.date),
+          dateValue,
+          formattedDate: dateValue ? formatDateLabel(dateValue) : "",
         };
       });
 
@@ -182,18 +205,28 @@ const TeacherClassView = () => {
   }, [fetchAttendanceRecords]);
 
   const generateDateOptions = useCallback(() => {
-    const dates = [];
+    const options = [];
     for (let i = 0; i < 21; i += 1) {
       const date = new Date();
+      date.setHours(12, 0, 0, 0);
       date.setDate(date.getDate() - i);
-      dates.push(formatDateLabel(date));
+      options.push({
+        value: date.toISOString(),
+        label: formatDateLabel(date),
+      });
     }
 
-    if (selectedDate && !dates.includes(selectedDate)) {
-      dates.unshift(selectedDate);
+    if (selectedDate) {
+      const hasExisting = options.some((option) => option.value === selectedDate);
+      if (!hasExisting) {
+        options.unshift({
+          value: selectedDate,
+          label: formatRecordDate(selectedDate) || selectedDate,
+        });
+      }
     }
 
-    return dates;
+    return options;
   }, [selectedDate]);
 
   const dateOptions = useMemo(() => generateDateOptions(), [generateDateOptions]);
@@ -243,9 +276,12 @@ const TeacherClassView = () => {
 
     const normalizedStatus = record.status === "Present" ? "Present" : "Absent";
 
+    const recordDate = record.dateValue || coerceToDate(record.date);
+    const selectedDateValue = recordDate ? recordDate.toISOString() : "";
+
     setSelectedRecord(record);
     setAttendanceStatus(normalizedStatus);
-    setSelectedDate(record.formattedDate || "");
+    setSelectedDate(selectedDateValue);
     setEditReason(record.editReason || "");
     setIsModalOpen(true);
   };
@@ -275,6 +311,13 @@ const TeacherClassView = () => {
     setIsSaving(true);
 
     const studentName = selectedRecord.studentName || "Student";
+    const trimmedEditReason = editReason.trim();
+
+    const parsedSelectedDate = selectedDate ? coerceToDate(selectedDate) : null;
+    const fallbackDateValue =
+      selectedRecord.dateValue || coerceToDate(selectedRecord.date) || null;
+    const finalDateValue = parsedSelectedDate || fallbackDateValue;
+    const dateToPersist = finalDateValue ? Timestamp.fromDate(finalDateValue) : null;
 
     try {
       const attendanceDocRef = doc(db, "attendance", selectedRecord.id);
@@ -282,7 +325,8 @@ const TeacherClassView = () => {
         status: normalizedStatus,
         editedBy: auth.currentUser.uid,
         editedAt: serverTimestamp(),
-        editReason: editReason.trim(),
+        editReason: trimmedEditReason,
+        date: dateToPersist,
       });
 
       pushToast({
@@ -573,8 +617,8 @@ const TeacherClassView = () => {
                 onChange={(event) => setSelectedDate(event.target.value)}
               >
                 {dateOptions.map((dateOption) => (
-                  <option key={dateOption} value={dateOption}>
-                    {dateOption}
+                  <option key={dateOption.value} value={dateOption.value}>
+                    {dateOption.label}
                   </option>
                 ))}
               </select>
