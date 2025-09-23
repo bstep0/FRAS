@@ -1,9 +1,7 @@
-// The teacher's individual class view page is currently hardcoded and incomplete, but shows what the page will look like
-// It will be completed in capstone II
-
 import React, { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ClassAttendanceChart from "./ClassAttendanceChart";
+import TeacherLayout from "./TeacherLayout";
 
 const TeacherClassView = () => {
   const { className } = useParams();
@@ -55,97 +53,91 @@ const TeacherClassView = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white p-6 border-r min-h-screen">
-      <img src="/logo.png" alt="Face Recognition Attendance" className="w-24 mx-auto mb-6" />
-        <h2 className="text-xl font-semibold mb-6">Attendance System</h2>
-        <nav>
-          <ul>
-            <li className="mb-4">
-              <Link to="/teacher" className="flex items-center p-2 hover:bg-gray-200 rounded">
-                📌 Dashboard
-              </Link>
-            </li>
-            <li className="mb-4">
-              <Link to="/teacher/classes" className="flex items-center p-2 hover:bg-gray-200 rounded">
-                📚 My Classes
-              </Link>
-            </li>
-            <li className="mb-4">
-              <Link to="/teacher/messages" className="flex items-center p-2 hover:bg-gray-200 rounded">
-                💬 Messages
-              </Link>
-            </li>
-          </ul>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-8">
-        <h1 className="text-3xl font-bold mb-6">{className} Overview</h1>
-        
-        {/* Pie Chart */}
-        <div className="mb-6 flex justify-start">
-          <ClassAttendanceChart />
+    <TeacherLayout title={`${className} Overview`}>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Link to="/teacher/classes" className="text-sm font-medium text-blue-600 hover:text-blue-800">
+            ← Back to classes
+          </Link>
+          <button className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+            Export Attendance
+          </button>
         </div>
 
-        {/* Attendance Section */}
-        <div className="bg-white p-6 rounded-lg shadow mb-6">
-          <h2 className="text-2xl font-semibold mb-4">Student List</h2>
-          <input
-            type="text"
-            placeholder="Search student name"
-            className="w-full p-2 border rounded mb-4"
-          />
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900">Attendance snapshot</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Review class-wide attendance performance at a glance.
+          </p>
+          <div className="mt-6 flex justify-start">
+            <ClassAttendanceChart />
+          </div>
+        </section>
 
-          {/* Student List */}
-          <ul className="space-y-4">
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Student list</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Update attendance statuses for individual students.
+              </p>
+            </div>
+            <input
+              type="text"
+              placeholder="Search student name"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none md:w-64"
+            />
+          </div>
+
+          <ul className="mt-6 space-y-4">
             {students.map((student, index) => (
-              <li key={index} className="grid grid-cols-[2fr,0.15fr,auto] items-center bg-gray-100 p-4 rounded-lg shadow">
-                <span className="text-lg font-semibold">{student.name}</span>
-                <button onClick={() => openModal(student)} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-700 ">
-                  Edit
+              <li
+                key={index}
+                className="flex flex-col gap-4 rounded-md border border-gray-100 bg-gray-50 p-4 shadow-sm md:flex-row md:items-center md:justify-between"
+              >
+                <span className="text-base font-semibold text-gray-900">{student.name}</span>
+                <button
+                  type="button"
+                  onClick={() => openModal(student)}
+                  className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Edit attendance
                 </button>
               </li>
             ))}
           </ul>
-        </div>
+        </section>
+      </div>
 
-        {/* Export Attendance */}
-        <button className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600">
-          Export Attendance
-        </button>
-      </main>
-
-      {/* Modal Window */}
       {isModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-semibold mb-4">Edit Attendance</h2>
-            <p className="text-gray-600">Student: <strong>{selectedStudent.name}</strong></p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-semibold text-gray-900">Edit Attendance</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Student: <strong>{selectedStudent.name}</strong>
+            </p>
 
-            {/* Dropdown for date*/}
-            <div className="mt-4 w-full">
-              <label className="block text-gray-700 mb-2">Select Date:</label>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700">Select date</label>
               <select
-                className="w-full p-2 border rounded-md"
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(event) => setSelectedDate(event.target.value)}
               >
                 {generateDateOptions().map((date, index) => (
-                  <option key={index} value={date}>{date}</option>
+                  <option key={index} value={date}>
+                    {date}
+                  </option>
                 ))}
               </select>
             </div>
 
-            {/* Dropdown for attendance status */}
-            <div className="mt-4 w-full">
-              <label className="block text-gray-700 mb-2">Attendance Status:</label>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700">Attendance status</label>
               <select
-                className="w-full p-2 border rounded-md"
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
                 value={attendanceStatus}
-                onChange={(e) => setAttendanceStatus(e.target.value)}
+                onChange={(event) => setAttendanceStatus(event.target.value)}
               >
                 <option value="Present">Present</option>
                 <option value="Absent">Absent</option>
@@ -153,19 +145,26 @@ const TeacherClassView = () => {
               </select>
             </div>
 
-            {/* Save/Close Buttons */}
-            <div className="mt-4 flex justify-end space-x-2">
-              <button onClick={closeModal} className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+              >
                 Cancel
               </button>
-              <button onClick={handleSave} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-700">
-                Save Changes
+              <button
+                type="button"
+                onClick={handleSave}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Save changes
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </TeacherLayout>
   );
 };
 
