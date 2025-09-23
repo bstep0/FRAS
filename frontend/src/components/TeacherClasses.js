@@ -1,94 +1,170 @@
-// The teacher's class page is currently hardcoded and incomplete, but what the page will look like
-// It will be completed in capstone II
-
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { Link } from "react-router-dom";
+import { auth, db } from "../firebaseConfig";
+import TeacherLayout from "./TeacherLayout";
+import { useNotifications } from "../context/NotificationsContext";
 
 const TeacherClasses = () => {
+  const [classes, setClasses] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { pushToast } = useNotifications();
+  const user = auth.currentUser;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchClasses = async () => {
+      if (!user?.email) {
+        if (isMounted) {
+          setClasses([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      setIsLoading(true);
+
+      try {
+        const usersRef = collection(db, "users");
+        const teacherQuery = query(usersRef, where("email", "==", user.email));
+        const teacherSnapshot = await getDocs(teacherQuery);
+
+        if (!isMounted) return;
+
+        if (teacherSnapshot.empty) {
+          setClasses([]);
+          setIsLoading(false);
+          return;
+        }
+
+        const teacherDoc = teacherSnapshot.docs[0];
+        const teacherData = teacherDoc.data();
+        const classIds = Array.isArray(teacherData.classes)
+          ? teacherData.classes.filter(Boolean)
+          : [];
+
+        let fetchedClasses = [];
+
+        if (classIds.length) {
+          fetchedClasses = await Promise.all(
+            classIds.map(async (classId) => {
+              try {
+                const classRef = doc(db, "classes", classId);
+                const classSnap = await getDoc(classRef);
+                if (!classSnap.exists()) {
+                  return null;
+                }
+                return { id: classSnap.id, ...classSnap.data() };
+              } catch (error) {
+                console.error(`Failed to fetch class ${classId}`, error);
+                return null;
+              }
+            })
+          );
+        } else {
+          const classesRef = collection(db, "classes");
+          const classesQuery = query(classesRef, where("teacher", "==", teacherDoc.id));
+          const classesSnapshot = await getDocs(classesQuery);
+          fetchedClasses = classesSnapshot.docs.map((classDoc) => ({
+            id: classDoc.id,
+            ...classDoc.data(),
+          }));
+        }
+
+        if (!isMounted) return;
+
+        const normalized = fetchedClasses
+          .filter(Boolean)
+          .map((classData) => {
+            const studentList =
+              classData.students ||
+              classData.studentIds ||
+              classData.enrolledStudents ||
+              [];
+            const studentCount = Array.isArray(studentList)
+              ? studentList.length
+              : Number(classData.studentCount || classData.enrollment) || 0;
+
+            return {
+              id: classData.id,
+              name: classData.name || classData.title || "Untitled class",
+              room: classData.room || classData.location || "",
+              schedule: classData.schedule || classData.time || "",
+              studentCount,
+            };
+          });
+
+        setClasses(normalized);
+      } catch (error) {
+        console.error("Error fetching teacher classes:", error);
+        pushToast({
+          tone: "error",
+          title: "Unable to load classes",
+          message: "We couldn't load your classes right now. Please try again shortly.",
+        });
+        if (isMounted) {
+          setClasses([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchClasses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user, pushToast]);
+
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white p-6 border-r min-h-screen">
-      <img src="/logo.png" alt="Face Recognition Attendance" className="w-24 mx-auto mb-6" />
-        <h2 className="text-xl font-semibold mb-6">Attendance System</h2>
-        <nav>
-          <ul>
-            <li className="mb-4">
-              <Link to="/teacher" className="flex items-center p-2 hover:bg-gray-200 rounded">
-                📌 Dashboard
-              </Link>
-            </li>
-            <li className="mb-4">
-              <Link to="/teacher/classes" className="flex items-center p-2 hover:bg-gray-200 rounded">
-                📚 My Classes
-              </Link>
-            </li>
-            <li className="mb-4">
-              <Link to="/teacher/messages" className="flex items-center p-2 hover:bg-gray-200 rounded">
-                💬 Messages
-              </Link>
-            </li>
-          </ul>
-        </nav>
-      </aside>
+    <TeacherLayout title="My Classes">
+      <div className="space-y-6">
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900">All classes</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Review rosters, manage attendance, and jump into the latest updates for each course you teach.
+          </p>
+          <div className="mt-6 space-y-4">
+            {isLoading ? (
+              <p className="text-sm text-gray-500">Loading classes…</p>
+            ) : classes.length ? (
+              classes.map((classItem) => (
+                <div
+                  key={classItem.id}
+                  className="flex flex-col gap-2 rounded-md border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700 shadow-sm md:flex-row md:items-center md:justify-between"
+                >
+                  <div>
+                    <p className="text-base font-semibold text-gray-900">{classItem.name}</p>
+                    <p>Room: {classItem.room || "TBD"}</p>
+                    <p>Schedule: {classItem.schedule || "See syllabus"}</p>
+                    <p>Students enrolled: {classItem.studentCount}</p>
+                  </div>
+                  <Link
+                    to={`/teacher/classes/${classItem.id}`}
+                    className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    View class
+                  </Link>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500">No classes assigned yet.</p>
+            )}
+          </div>
+        </section>
 
-      {/* Main Content */}
-      <main className="flex-1 p-8">
-        <h1 className="text-3xl font-bold mb-6">My Classes</h1>
-
-        {/* Class List */}
-        <div className="bg-white p-6 rounded-lg shadow mb-6">
-        <h2 className="text-2xl font-semibold mb-4">All Classes</h2>
-        <ul className="space-y-4">
-          {[
-            { name: "CSCE 4905", students: 28 },
-            { name: "CSCE 3055", students: 17 },
-            { name: "CSCE 1040", students: 47 },
-          ].map((classItem, index) => (
-            <li key={index} className="flex justify-between items-center bg-gray-100 p-4 rounded-lg shadow">
-              <div>
-                <h3 className="text-lg font-semibold">{classItem.name}</h3>
-                <p className="text-gray-600">{classItem.students} Students Enrolled</p>
-              </div>
-              {/* Buttons Section */}
-              <div className="flex space-x-2">
-              <Link to={`/teacher/classes/${classItem.name}`} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                View
-              </Link>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <section className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-sm text-gray-600 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900">Recent attendance updates</h3>
+          <p className="mt-2">
+            Attendance summaries will appear here when your students start checking in.
+          </p>
+        </section>
       </div>
-
-        {/* Recent Attendance Updates */}
-        <h2 className="text-2xl font-semibold mb-4">Recent Attendance Updates</h2>
-        <div className="bg-white p-4 shadow rounded-lg">
-        <table className="w-full bg-white shadow rounded-lg">
-          <tbody>
-            <tr className="border-b">
-              <td className="p-4"> CSCE 4905</td>
-              <td>Alice Johnson</td>
-              <td>Present</td>
-              <td>(1 hour ago)</td>
-            </tr>
-            <tr className="border-b">
-              <td className="p-4"> CSCE 1040</td>
-              <td>Jane Smith</td>
-              <td>Absent</td>
-              <td>(14 mins ago)</td>
-            </tr>
-            <tr>
-              <td className="p-4"> CSCE 3055</td>
-              <td>John Doe</td>
-              <td>Late</td>
-              <td>(4 mins ago)</td>
-            </tr>
-          </tbody>
-        </table>
-        </div>
-      </main>
-    </div>
+    </TeacherLayout>
   );
 };
 

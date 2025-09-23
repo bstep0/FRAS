@@ -28,7 +28,7 @@ function App() {
           {/* Teacher Routes */}
           <Route path="/teacher" element={<TeacherDashboard />} />
           <Route path="/teacher/messages" element={<TeacherMessages />} />
-          <Route path="/teacher/messages/:studentName" element={<TeacherMessageView />} />
+          <Route path="/teacher/messages/:messageId" element={<TeacherMessageView />} />
           <Route path="/teacher/classes" element={<TeacherClasses />} />
           <Route path="/teacher/classes/:className" element={<TeacherClassView />} />
 

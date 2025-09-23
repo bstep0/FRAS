@@ -1,7 +1,11 @@
+
 // The teacher's individual class view page is currently hardcoded and incomplete, but shows what the page will look like
 // It will be completed in capstone II
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+
+import React, { useState } from "react";
+
 import { Link, useParams } from "react-router-dom";
 import {
   collection,
@@ -16,6 +20,7 @@ import {
 import { auth, db } from "../firebaseConfig";
 import { useNotifications } from "../context/NotificationsContext";
 import ClassAttendanceChart from "./ClassAttendanceChart";
+import TeacherLayout from "./TeacherLayout";
 
 const formatDateLabel = (date) =>
   date.toLocaleDateString("en-US", {
@@ -277,6 +282,7 @@ const TeacherClassView = () => {
     status === "Present" || status === "Absent" ? status : status || "Unknown";
 
   return (
+
     <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
       <aside className="min-h-screen w-64 border-r bg-white p-6">
@@ -392,24 +398,107 @@ const TeacherClassView = () => {
               <label className="mb-2 block text-gray-700">Select Date:</label>
               <select
                 className="w-full rounded border p-2"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                
+    <TeacherLayout title={`${className} Overview`}>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Link to="/teacher/classes" className="text-sm font-medium text-blue-600 hover:text-blue-800">
+            ← Back to classes
+          </Link>
+          <button className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+            Export Attendance
+          </button>
+        </div>
+
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900">Attendance snapshot</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Review class-wide attendance performance at a glance.
+          </p>
+          <div className="mt-6 flex justify-start">
+            <ClassAttendanceChart />
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Student list</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Update attendance statuses for individual students.
+              </p>
+            </div>
+            <input
+              type="text"
+              placeholder="Search student name"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none md:w-64"
+            />
+          </div>
+
+          <ul className="mt-6 space-y-4">
+            {students.map((student, index) => (
+              <li
+                key={index}
+                className="flex flex-col gap-4 rounded-md border border-gray-100 bg-gray-50 p-4 shadow-sm md:flex-row md:items-center md:justify-between"
               >
+                <span className="text-base font-semibold text-gray-900">{student.name}</span>
+                <button
+                  type="button"
+                  onClick={() => openModal(student)}
+                  className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Edit attendance
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-semibold text-gray-900">Edit Attendance</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Student: <strong>{selectedStudent.name}</strong>
+            </p>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700">Select date</label>
+              <select
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
+
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+              >
+
                 {dateOptions.map((dateOption) => (
                   <option key={dateOption} value={dateOption}>
                     {dateOption}
+
+                {generateDateOptions().map((date, index) => (
+                  <option key={index} value={date}>
+                    {date}
+
                   </option>
                 ))}
               </select>
             </div>
+
 
             {/* Dropdown for attendance status */}
             <div className="mt-4 w-full">
               <label className="mb-2 block text-gray-700">Attendance Status:</label>
               <select
                 className="w-full rounded border p-2"
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700">Attendance status</label>
+              <select
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
+
                 value={attendanceStatus}
-                onChange={(e) => setAttendanceStatus(e.target.value)}
+                onChange={(event) => setAttendanceStatus(event.target.value)}
               >
                 <option value="Present">Present</option>
                 <option value="Absent">Absent</option>
@@ -434,6 +523,13 @@ const TeacherClassView = () => {
                 onClick={closeModal}
                 className="rounded bg-gray-500 px-4 py-2 text-white transition hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-70"
                 disabled={isSaving}
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+
               >
                 Cancel
               </button>
@@ -448,12 +544,17 @@ const TeacherClassView = () => {
                 }`}
               >
                 {isSaving ? "Saving..." : "Save Changes"}
+
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Save changes
+
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </TeacherLayout>
   );
 };
 
