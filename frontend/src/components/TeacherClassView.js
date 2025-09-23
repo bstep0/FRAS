@@ -3,9 +3,6 @@
 // It will be completed in capstone II
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-
-import React, { useState } from "react";
-
 import { Link, useParams } from "react-router-dom";
 import {
   collection,
