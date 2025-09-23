@@ -10,6 +10,13 @@ import os
 from deepface import DeepFace
 from zoneinfo import ZoneInfo
 
+from ipaddress import ip_address
+
+try:
+    from .allowed_networks import UNT_EAGLENET_NETWORKS
+except ImportError:  # pragma: no cover - fallback for script execution
+    from allowed_networks import UNT_EAGLENET_NETWORKS
+
 app = Flask(__name__)
 
 @app.after_request
@@ -222,7 +229,31 @@ def finalize_attendance():
 def face_recognition():
     if request.method == "OPTIONS":
         return "", 200
+      
+def get_client_ip(req):
+    """Extract the best-effort client IP address from the incoming request."""
+    forwarded_for = req.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        for part in forwarded_for.split(","):
+            ip_candidate = part.strip()
+            if ip_candidate:
+                return ip_candidate
+    real_ip = req.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    return req.remote_addr
 
+
+def is_ip_allowed(ip_str):
+    if not ip_str:
+        return False
+    try:
+        client_ip = ip_address(ip_str)
+    except ValueError:
+        return False
+    return any(client_ip in network for network in UNT_EAGLENET_NETWORKS)
+
+def _process_face_recognition_request():
     # Temporary filenames for the captured face and the known face downloaded from storage
     temp_captured_path = "temp_captured_face.jpg"
     temp_known_path = "temp_known_face.jpg"
@@ -232,7 +263,7 @@ def face_recognition():
         image_b64 = data.get("image")
         class_id = data.get("classId")
         student_id = data.get("studentId")
-        
+
         if not image_b64 or not class_id or not student_id:
             return jsonify({"status": "error", "message": "Missing image, classId, or studentId"}), 400
 
@@ -339,6 +370,22 @@ def face_recognition():
             os.remove(temp_captured_path)
         if os.path.exists(temp_known_path):
             os.remove(temp_known_path)
+
+
+@app.route("/api/face-recognition", methods=["POST", "OPTIONS"])
+def face_recognition():
+    if request.method == "OPTIONS":
+        return "", 200
+
+    client_ip = get_client_ip(request)
+    if not is_ip_allowed(client_ip):
+        app.logger.warning("Rejected face recognition request from unauthorized IP %s", client_ip)
+        return jsonify({
+            "status": "forbidden",
+            "message": "Access denied: client IP is not authorized to use this service."
+        }), 403
+
+    return _process_face_recognition_request()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
