@@ -1,4 +1,3 @@
-
 // The teacher's individual class view page is currently hardcoded and incomplete, but shows what the page will look like
 // It will be completed in capstone II
 
@@ -14,10 +13,9 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { auth, db } from "../firebaseConfig";
+import { auth, db } from "../firebaseConfig"; // single import (no duplicates)
 import { useNotifications } from "../context/NotificationsContext";
 import ClassAttendanceChart from "./ClassAttendanceChart";
-import { auth } from "../firebaseConfig";
 import { EXPORT_ATTENDANCE_ENDPOINT } from "../config/api";
 import TeacherLayout from "./TeacherLayout";
 
@@ -58,32 +56,14 @@ const formatRecordDate = (value) => {
 
 const resolveStudentName = (studentData, fallbackName, fallbackId) => {
   if (studentData) {
-    const {
-      displayName,
-      fullName,
-      name,
-      firstName,
-      lastName,
-      fname,
-      lname,
-      email,
-    } = studentData;
+    const { displayName, fullName, name, firstName, lastName, email } = studentData;
 
     if (displayName) return displayName;
     if (fullName) return fullName;
     if (name) return name;
 
-    const nameCandidates = [
-      [firstName, lastName],
-      [fname, lname],
-      [firstName || fname, lastName || lname],
-    ];
-
-    for (const parts of nameCandidates) {
-      const combined = parts.filter(Boolean).join(" ").trim();
-      if (combined) return combined;
-    }
-
+    const combined = [firstName, lastName].filter(Boolean).join(" ").trim();
+    if (combined) return combined;
     if (email) return email;
   }
 
@@ -94,6 +74,8 @@ const resolveStudentName = (studentData, fallbackName, fallbackId) => {
 };
 
 const TeacherClassView = () => {
+  // URL param: /teacher/classes/:className
+  // We store it in classId for clarity and use it consistently everywhere
   const { className: classId } = useParams();
 
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -237,9 +219,7 @@ const TeacherClassView = () => {
   };
 
   const handleSave = async () => {
-    if (!selectedRecord) {
-      return;
-    }
+    if (!selectedRecord) return;
 
     const normalizedStatus = attendanceStatus === "Present" ? "Present" : "Absent";
 
@@ -286,16 +266,15 @@ const TeacherClassView = () => {
   };
 
   const statusBadgeClasses = (status) => {
-    const normalizedStatus = status === "Present" ? "Present" : status === "Absent" ? "Absent" : "Other";
+    const normalizedStatus =
+      status === "Present" ? "Present" : status === "Absent" ? "Absent" : "Other";
 
     if (normalizedStatus === "Present") {
       return "rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700";
     }
-
     if (normalizedStatus === "Absent") {
       return "rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700";
     }
-
     return "rounded-full bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700";
   };
 
@@ -332,35 +311,27 @@ const TeacherClassView = () => {
     try {
       const idToken = await user.getIdToken();
       const url = new URL(EXPORT_ATTENDANCE_ENDPOINT);
-      url.searchParams.set("classId", className);
+      url.searchParams.set("classId", classId); // use classId consistently
       url.searchParams.set("startDate", startDate);
       url.searchParams.set("endDate", endDate);
 
       const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
+        headers: { Authorization: `Bearer ${idToken}` },
       });
 
       if (!response.ok) {
         let errorMessage = "Unable to export attendance. Please try again later.";
-
         try {
           const data = await response.json();
-          if (data && data.message) {
-            errorMessage = data.message;
-          }
-        } catch (jsonError) {
+          if (data?.message) errorMessage = data.message;
+        } catch {
           try {
             const text = await response.text();
-            if (text) {
-              errorMessage = text;
-            }
-          } catch (textError) {
-            console.warn("Unable to parse error response", jsonError, textError);
+            if (text) errorMessage = text;
+          } catch {
+            /* ignore */
           }
         }
-
         setExportFeedback({ type: "error", message: errorMessage });
         return;
       }
@@ -368,13 +339,11 @@ const TeacherClassView = () => {
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
 
-      let filename = `attendance-${className}-${startDate}-to-${endDate}.csv`;
+      let filename = `attendance-${classId}-${startDate}-to-${endDate}.csv`;
       const contentDisposition = response.headers.get("Content-Disposition");
       if (contentDisposition) {
         const match = contentDisposition.match(/filename="?([^";]+)"?/);
-        if (match && match[1]) {
-          filename = match[1];
-        }
+        if (match?.[1]) filename = match[1];
       }
 
       const link = document.createElement("a");
@@ -393,78 +362,53 @@ const TeacherClassView = () => {
       console.error("Attendance export failed:", error);
       setExportFeedback({
         type: "error",
-        message: "We couldn't export attendance right now. Please verify your connection and try again.",
+        message:
+          "We couldn't export attendance right now. Please verify your connection and try again.",
       });
     } finally {
       setIsExporting(false);
     }
   };
-  
+
   const displayStatus = (status) =>
     status === "Present" || status === "Absent" ? status : status || "Unknown";
 
   return (
-
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <aside className="min-h-screen w-64 border-r bg-white p-6">
-        <img
-          src="/logo.png"
-          alt="Face Recognition Attendance"
-          className="mx-auto mb-6 w-24"
-        />
-        <h2 className="mb-6 text-xl font-semibold">Attendance System</h2>
-        <nav>
-          <ul>
-            <li className="mb-4">
-              <Link
-                to="/teacher"
-                className="flex items-center rounded p-2 hover:bg-gray-200"
-              >
-                📌 Dashboard
-              </Link>
-            </li>
-            <li className="mb-4">
-              <Link
-                to="/teacher/classes"
-                className="flex items-center rounded p-2 hover:bg-gray-200"
-              >
-                📚 My Classes
-              </Link>
-            </li>
-            <li className="mb-4">
-              <Link
-                to="/teacher/messages"
-                className="flex items-center rounded p-2 hover:bg-gray-200"
-              >
-                💬 Messages
-              </Link>
-            </li>
-          </ul>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-8">
-        <h1 className="mb-6 text-3xl font-bold">
-          {classId ? `${classId} Overview` : "Class Overview"}
-        </h1>
-
-        {/* Pie Chart */}
-        <div className="mb-6 flex justify-start">
-          <ClassAttendanceChart />
+    <TeacherLayout title={classId ? `${classId} Overview` : "Class Overview"}>
+      <div className="space-y-6">
+        {/* Header actions */}
+        <div className="flex items-center justify-between">
+          <Link
+            to="/teacher/classes"
+            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+          >
+            ← Back to classes
+          </Link>
         </div>
 
-        {/* Attendance Section */}
-        <div className="mb-6 rounded-lg bg-white p-6 shadow">
+        {/* Attendance snapshot */}
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900">Attendance snapshot</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Review class-wide attendance performance at a glance.
+          </p>
+          <div className="mt-6 flex justify-start">
+            <ClassAttendanceChart />
+          </div>
+        </section>
+
+        {/* Student list */}
+        <section className="rounded-lg bg-white p-6 shadow">
           <h2 className="mb-4 text-2xl font-semibold">Student List</h2>
+
+          {/* Search (non-functional placeholder for now) */}
           <input
             type="text"
             placeholder="Search student name"
             className="mb-4 w-full rounded border p-2"
+            aria-label="Search student"
           />
 
-          {/* Student List */}
           {isLoading ? (
             <p className="text-sm text-gray-500">Loading attendance records…</p>
           ) : attendanceRecords.length === 0 ? (
@@ -498,18 +442,22 @@ const TeacherClassView = () => {
               ))}
             </ul>
           )}
-        </div>
+        </section>
 
         {/* Export Attendance */}
-        <div className="bg-white p-6 rounded-lg shadow space-y-4">
+        <section className="space-y-4 rounded-lg bg-white p-6 shadow">
           <h2 className="text-2xl font-semibold">Export Attendance</h2>
           <p className="text-sm text-gray-600">
-            Choose the date range you would like to export. A CSV file will be generated with all records that
-            match your selection.
+            Choose the date range you would like to export. A CSV file will be generated with all
+            records that match your selection.
           </p>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="attendance-start-date">
+              <label
+                className="mb-1 block text-sm font-medium text-gray-700"
+                htmlFor="attendance-start-date"
+              >
                 Start date
               </label>
               <input
@@ -522,7 +470,10 @@ const TeacherClassView = () => {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="attendance-end-date">
+              <label
+                className="mb-1 block text-sm font-medium text-gray-700"
+                htmlFor="attendance-end-date"
+              >
                 End date
               </label>
               <input
@@ -535,6 +486,7 @@ const TeacherClassView = () => {
               />
             </div>
           </div>
+
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -550,6 +502,7 @@ const TeacherClassView = () => {
               Only teachers assigned to this class can export attendance data.
             </span>
           </div>
+
           {exportFeedback && (
             <p
               className={`text-sm ${
@@ -559,125 +512,39 @@ const TeacherClassView = () => {
               {exportFeedback.message}
             </p>
           )}
-        </div>
-        <button className="rounded bg-green-500 px-6 py-2 text-white hover:bg-green-600">
-          Export Attendance
-        </button>
-      </main>
-
-      {/* Modal Window */}
-      {isModalOpen && selectedRecord && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="w-96 rounded-lg bg-white p-6 shadow-lg">
-            <h2 className="mb-4 text-xl font-semibold">Edit Attendance</h2>
-            <p className="text-gray-600">
-              Student: <strong>{selectedRecord.studentName}</strong>
-            </p>
-
-            {/* Dropdown for date*/}
-            <div className="mt-4 w-full">
-              <label className="mb-2 block text-gray-700">Select Date:</label>
-              <select
-                className="w-full rounded border p-2"
-                
-    <TeacherLayout title={`${className} Overview`}>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <Link to="/teacher/classes" className="text-sm font-medium text-blue-600 hover:text-blue-800">
-            ← Back to classes
-          </Link>
-          <button className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
-            Export Attendance
-          </button>
-        </div>
-
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">Attendance snapshot</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Review class-wide attendance performance at a glance.
-          </p>
-          <div className="mt-6 flex justify-start">
-            <ClassAttendanceChart />
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Student list</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                Update attendance statuses for individual students.
-              </p>
-            </div>
-            <input
-              type="text"
-              placeholder="Search student name"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none md:w-64"
-            />
-          </div>
-
-          <ul className="mt-6 space-y-4">
-            {students.map((student, index) => (
-              <li
-                key={index}
-                className="flex flex-col gap-4 rounded-md border border-gray-100 bg-gray-50 p-4 shadow-sm md:flex-row md:items-center md:justify-between"
-              >
-                <span className="text-base font-semibold text-gray-900">{student.name}</span>
-                <button
-                  type="button"
-                  onClick={() => openModal(student)}
-                  className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                  Edit attendance
-                </button>
-              </li>
-            ))}
-          </ul>
         </section>
       </div>
 
-      {isModalOpen && (
+      {/* Modal */}
+      {isModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <h2 className="text-xl font-semibold text-gray-900">Edit Attendance</h2>
             <p className="mt-2 text-sm text-gray-600">
-              Student: <strong>{selectedStudent.name}</strong>
+              Student: <strong>{selectedRecord.studentName}</strong>
             </p>
 
+            {/* Date */}
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700">Select date</label>
               <select
                 className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
-
                 value={selectedDate}
                 onChange={(event) => setSelectedDate(event.target.value)}
               >
-
                 {dateOptions.map((dateOption) => (
                   <option key={dateOption} value={dateOption}>
                     {dateOption}
-
-                {generateDateOptions().map((date, index) => (
-                  <option key={index} value={date}>
-                    {date}
-
                   </option>
                 ))}
               </select>
             </div>
 
-
-            {/* Dropdown for attendance status */}
-            <div className="mt-4 w-full">
-              <label className="mb-2 block text-gray-700">Attendance Status:</label>
-              <select
-                className="w-full rounded border p-2"
-
+            {/* Status */}
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700">Attendance status</label>
               <select
                 className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
-
                 value={attendanceStatus}
                 onChange={(event) => setAttendanceStatus(event.target.value)}
               >
@@ -686,8 +553,11 @@ const TeacherClassView = () => {
               </select>
             </div>
 
-            <div className="mt-4 w-full">
-              <label className="mb-2 block text-gray-700">Reason for edit (optional):</label>
+            {/* Reason */}
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Reason for edit (optional)
+              </label>
               <textarea
                 className="w-full resize-y rounded border p-2"
                 rows={3}
@@ -697,20 +567,13 @@ const TeacherClassView = () => {
               />
             </div>
 
-            {/* Save/Close Buttons */}
-            <div className="mt-4 flex justify-end space-x-2">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded bg-gray-500 px-4 py-2 text-white transition hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-70"
-                disabled={isSaving}
-
+            {/* Actions */}
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={closeModal}
                 className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
-
+                disabled={isSaving}
               >
                 Cancel
               </button>
@@ -718,18 +581,11 @@ const TeacherClassView = () => {
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving}
-                className={`rounded px-4 py-2 text-white ${
-                  isSaving
-                    ? "cursor-not-allowed bg-blue-400"
-                    : "bg-blue-500 hover:bg-blue-700"
+                className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
+                  isSaving ? "cursor-not-allowed bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
                 }`}
               >
-                {isSaving ? "Saving..." : "Save Changes"}
-
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Save changes
-
+                {isSaving ? "Saving…" : "Save changes"}
               </button>
             </div>
           </div>
