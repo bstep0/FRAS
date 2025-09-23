@@ -223,13 +223,7 @@ def finalize_attendance():
         "recordId": record_id,
         "finalStatus": pending_status,
     }), 200
-
-
-@app.route("/api/face-recognition", methods=["POST", "OPTIONS"])
-def face_recognition():
-    if request.method == "OPTIONS":
-        return "", 200
-      
+     
 def get_client_ip(req):
     """Extract the best-effort client IP address from the incoming request."""
     forwarded_for = req.headers.get("X-Forwarded-For", "")
