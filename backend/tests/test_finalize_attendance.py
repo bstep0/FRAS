@@ -178,8 +178,9 @@ def test_finalize_attendance_accepts_allowlisted_request(load_app):
         "studentID": "A12345",
         "classID": "CPSC101",
         "date": datetime.datetime(2024, 4, 1, 9, 0, tzinfo=CENTRAL_TZ),
-        "status": "Pending",
-        "pendingStatus": "Present",
+        "status": "pending",
+        "isPending": True,
+        "proposedStatus": "Present",
     }
 
     app_module, fake_db = load_app({record_id: original_record})
@@ -205,7 +206,8 @@ def test_finalize_attendance_accepts_allowlisted_request(load_app):
     stored_record = fake_db.get_attendance(record_id)
     assert stored_record["status"] == "Present"
     assert stored_record["date"] == original_record["date"]
-    assert "pendingStatus" not in stored_record
+    assert "proposedStatus" not in stored_record
+    assert "isPending" not in stored_record
     assert "rejectionReason" not in stored_record
     assert "finalizedAt" in stored_record
 
@@ -216,8 +218,9 @@ def test_finalize_attendance_rejects_outside_allowlist(load_app):
         "studentID": "A12345",
         "classID": "CPSC101",
         "date": datetime.datetime(2024, 4, 2, 9, 0, tzinfo=CENTRAL_TZ),
-        "status": "Pending",
-        "pendingStatus": "Late",
+        "status": "pending",
+        "isPending": True,
+        "proposedStatus": "Late",
     }
 
     app_module, fake_db = load_app({record_id: original_record})
@@ -244,5 +247,6 @@ def test_finalize_attendance_rejects_outside_allowlist(load_app):
     assert stored_record["status"] == "Rejected"
     assert stored_record["date"] == original_record["date"]
     assert stored_record["rejectionReason"] == "Follow-up request must originate from EagleNet."
-    assert "pendingStatus" not in stored_record
+    assert "proposedStatus" not in stored_record
+    assert "isPending" not in stored_record
     assert "finalizedAt" in stored_record
