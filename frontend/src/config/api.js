@@ -14,11 +14,13 @@ if (trimmedBase.endsWith(faceRecognitionSuffix)) {
 export const API_BASE = apiBase;
 export const FACE_RECOGNITION_ENDPOINT = `${API_BASE}/api/face-recognition`;
 export const FINALIZE_ATTENDANCE_ENDPOINT = `${API_BASE}/api/attendance/finalize`;
+export const EXPORT_ATTENDANCE_ENDPOINT = `${API_BASE}/api/attendance/export`;
 export const PENDING_VERIFICATION_MINUTES = 45;
 
 export default {
   API_BASE,
   FACE_RECOGNITION_ENDPOINT,
   FINALIZE_ATTENDANCE_ENDPOINT,
+  EXPORT_ATTENDANCE_ENDPOINT,
   PENDING_VERIFICATION_MINUTES,
 };

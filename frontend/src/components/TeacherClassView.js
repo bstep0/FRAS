@@ -4,6 +4,8 @@
 import React, { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ClassAttendanceChart from "./ClassAttendanceChart";
+import { auth } from "../firebaseConfig";
+import { EXPORT_ATTENDANCE_ENDPOINT } from "../config/api";
 
 const TeacherClassView = () => {
   const { className } = useParams();
@@ -20,6 +22,10 @@ const TeacherClassView = () => {
   const [attendanceStatus, setAttendanceStatus] = useState("Present");
   const [selectedDate, setSelectedDate] = useState(""); 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportFeedback, setExportFeedback] = useState(null);
 
   const generateDateOptions = () => {
     const dates = [];
@@ -52,6 +58,107 @@ const TeacherClassView = () => {
 
     console.log(`Updated ${selectedStudent.name} to ${attendanceStatus} on ${selectedDate}`);
     closeModal();
+  };
+
+  const handleExportAttendance = async () => {
+    setExportFeedback(null);
+
+    if (!startDate || !endDate) {
+      setExportFeedback({
+        type: "error",
+        message: "Select a start and end date before exporting attendance.",
+      });
+      return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      setExportFeedback({
+        type: "error",
+        message: "The start date must be on or before the end date.",
+      });
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) {
+      setExportFeedback({
+        type: "error",
+        message: "You must be signed in as a teacher to export attendance records.",
+      });
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const idToken = await user.getIdToken();
+      const url = new URL(EXPORT_ATTENDANCE_ENDPOINT);
+      url.searchParams.set("classId", className);
+      url.searchParams.set("startDate", startDate);
+      url.searchParams.set("endDate", endDate);
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = "Unable to export attendance. Please try again later.";
+
+        try {
+          const data = await response.json();
+          if (data && data.message) {
+            errorMessage = data.message;
+          }
+        } catch (jsonError) {
+          try {
+            const text = await response.text();
+            if (text) {
+              errorMessage = text;
+            }
+          } catch (textError) {
+            console.warn("Unable to parse error response", jsonError, textError);
+          }
+        }
+
+        setExportFeedback({ type: "error", message: errorMessage });
+        return;
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      let filename = `attendance-${className}-${startDate}-to-${endDate}.csv`;
+      const contentDisposition = response.headers.get("Content-Disposition");
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      }
+
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+      setExportFeedback({
+        type: "success",
+        message: "Attendance export complete. Check your downloads folder for the CSV file.",
+      });
+    } catch (error) {
+      console.error("Attendance export failed:", error);
+      setExportFeedback({
+        type: "error",
+        message: "We couldn't export attendance right now. Please verify your connection and try again.",
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -113,9 +220,65 @@ const TeacherClassView = () => {
         </div>
 
         {/* Export Attendance */}
-        <button className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600">
-          Export Attendance
-        </button>
+        <div className="bg-white p-6 rounded-lg shadow space-y-4">
+          <h2 className="text-2xl font-semibold">Export Attendance</h2>
+          <p className="text-sm text-gray-600">
+            Choose the date range you would like to export. A CSV file will be generated with all records that
+            match your selection.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="attendance-start-date">
+                Start date
+              </label>
+              <input
+                id="attendance-start-date"
+                type="date"
+                className="w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                value={startDate}
+                max={endDate || undefined}
+                onChange={(event) => setStartDate(event.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="attendance-end-date">
+                End date
+              </label>
+              <input
+                id="attendance-end-date"
+                type="date"
+                className="w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(event) => setEndDate(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleExportAttendance}
+              disabled={isExporting}
+              className={`rounded bg-green-500 px-6 py-2 font-semibold text-white transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 ${
+                isExporting ? "cursor-not-allowed opacity-60" : ""
+              }`}
+            >
+              {isExporting ? "Exporting…" : "Export Attendance"}
+            </button>
+            <span className="text-sm text-gray-500">
+              Only teachers assigned to this class can export attendance data.
+            </span>
+          </div>
+          {exportFeedback && (
+            <p
+              className={`text-sm ${
+                exportFeedback.type === "error" ? "text-red-600" : "text-green-600"
+              }`}
+            >
+              {exportFeedback.message}
+            </p>
+          )}
+        </div>
       </main>
 
       {/* Modal Window */}

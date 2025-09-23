@@ -3,6 +3,7 @@ import importlib
 import importlib.util
 import sys
 import types
+import logging
 
 import pytest
 
@@ -15,8 +16,9 @@ DELETE_FIELD = object()
 
 
 class FakeDocumentSnapshot:
-    def __init__(self, data):
+    def __init__(self, data, doc_id=None):
         self._data = data
+        self._doc_id = doc_id
 
     @property
     def exists(self):
@@ -27,17 +29,25 @@ class FakeDocumentSnapshot:
             return None
         return dict(self._data)
 
+    @property
+    def id(self):
+        return self._doc_id
+
 
 class FakeDocument:
     def __init__(self, store, doc_id):
         self._store = store
         self._doc_id = doc_id
 
+    @property
+    def id(self):
+        return self._doc_id
+
     def get(self):
         data = self._store.get(self._doc_id)
         if data is None:
-            return FakeDocumentSnapshot(None)
-        return FakeDocumentSnapshot(dict(data))
+            return FakeDocumentSnapshot(None, self._doc_id)
+        return FakeDocumentSnapshot(dict(data), self._doc_id)
 
     def set(self, data):
         self._store[self._doc_id] = dict(data)
@@ -90,22 +100,97 @@ def load_app(monkeypatch):
 
         flask_module = types.ModuleType("flask")
 
+        class FakeResponse:
+            def __init__(self, iterable=None, mimetype=None, status=200):
+                self.iterable = iterable
+                self.mimetype = mimetype
+                self.headers = {}
+                self.status_code = status
+
+        def fake_stream_with_context(generator):
+            return generator
+
         class FakeFlask:
             def __init__(self, _name):
-                pass
+                self._after_request_handlers = []
+                self._routes = {}
+                self.logger = logging.getLogger("fake_flask_app")
 
             def after_request(self, func):
+                self._after_request_handlers.append(func)
                 return func
 
             def route(self, *args, **kwargs):
+                rule = args[0] if args else ""
+                methods = kwargs.get("methods") or ["GET"]
+
                 def decorator(func):
+                    entry = self._routes.setdefault(rule, {})
+                    for method in methods:
+                        entry[method.upper()] = func
                     return func
 
                 return decorator
 
+            def _build_response(self, result):
+                headers = {}
+                status = 200
+                payload = result
+
+                if isinstance(result, FakeResponse):
+                    payload = result.iterable
+                    status = getattr(result, "status_code", 200)
+                    headers = dict(result.headers)
+                elif isinstance(result, tuple):
+                    payload = result[0]
+                    if len(result) > 1:
+                        status = result[1]
+                    if len(result) > 2 and isinstance(result[2], dict):
+                        headers = dict(result[2])
+
+                response = FakeResponse(payload, None, status)
+                response.headers.update(headers)
+
+                for handler in self._after_request_handlers:
+                    maybe_new = handler(response)
+                    if maybe_new is not None:
+                        response = maybe_new
+
+                return response
+
+            def test_client(self):
+                app = self
+
+                class FakeClient:
+                    def _invoke(self, path, method, json_payload=None, headers=None, environ=None):
+                        headers = headers or {}
+                        environ = environ or {}
+
+                        flask_module.request.headers = headers
+                        flask_module.request.remote_addr = environ.get("REMOTE_ADDR")
+                        flask_module.request.get_json = lambda silent=True: json_payload
+                        flask_module.request.method = method
+
+                        handler = app._routes.get(path, {}).get(method)
+                        if handler is None:
+                            raise AssertionError(f"No handler registered for {method} {path}")
+
+                        result = handler()
+                        return app._build_response(result)
+
+                    def post(self, path, json=None, headers=None, environ_base=None):
+                        return self._invoke(path, "POST", json_payload=json, headers=headers, environ=environ_base)
+
+                    def options(self, path, json=None, headers=None, environ_base=None):
+                        return self._invoke(path, "OPTIONS", json_payload=json, headers=headers, environ=environ_base)
+
+                return FakeClient()
+
         flask_module.Flask = FakeFlask
         flask_module.request = types.SimpleNamespace()
         flask_module.jsonify = lambda payload: payload
+        flask_module.Response = FakeResponse
+        flask_module.stream_with_context = fake_stream_with_context
 
         firebase_admin_module = types.ModuleType("firebase_admin")
         credentials_module = types.ModuleType("firebase_admin.credentials")
@@ -118,9 +203,31 @@ def load_app(monkeypatch):
         storage_module = types.ModuleType("firebase_admin.storage")
         storage_module.bucket = lambda: FakeBucket()
 
+        auth_module = types.ModuleType("firebase_admin.auth")
+
+        class _FakeAuth:
+            class InvalidIdTokenError(Exception):
+                pass
+
+            class ExpiredIdTokenError(Exception):
+                pass
+
+            class RevokedIdTokenError(Exception):
+                pass
+
+            @staticmethod
+            def verify_id_token(_token):
+                return {"uid": "fake-teacher", "email": "teacher@example.com"}
+
+        auth_module.InvalidIdTokenError = _FakeAuth.InvalidIdTokenError
+        auth_module.ExpiredIdTokenError = _FakeAuth.ExpiredIdTokenError
+        auth_module.RevokedIdTokenError = _FakeAuth.RevokedIdTokenError
+        auth_module.verify_id_token = _FakeAuth.verify_id_token
+
         firebase_admin_module.credentials = credentials_module
         firebase_admin_module.firestore = firestore_module
         firebase_admin_module.storage = storage_module
+        firebase_admin_module.auth = auth_module
         firebase_admin_module.initialize_app = lambda *args, **kwargs: None
 
         sys.modules["flask"] = flask_module
@@ -152,6 +259,10 @@ def load_app(monkeypatch):
         sys.modules["firebase_admin.credentials"] = credentials_module
         sys.modules["firebase_admin.firestore"] = firestore_module
         sys.modules["firebase_admin.storage"] = storage_module
+        sys.modules["firebase_admin.auth"] = auth_module
+
+        preserved_backend_pkg = sys.modules.get("backend")
+        preserved_backend_app = sys.modules.get("backend.app")
 
         sys.modules.pop("backend", None)
         sys.modules.pop("backend.app", None)
@@ -167,7 +278,20 @@ def load_app(monkeypatch):
         spec.loader.exec_module(app_module)
         app_module.db = fake_db
         app_module.bucket = FakeBucket()
-        return app_module, fake_db
+
+        result = (app_module, fake_db)
+
+        if preserved_backend_app is not None:
+            sys.modules["backend.app"] = preserved_backend_app
+        else:
+            sys.modules.pop("backend.app", None)
+
+        if preserved_backend_pkg is not None:
+            sys.modules["backend"] = preserved_backend_pkg
+        else:
+            sys.modules.pop("backend", None)
+
+        return result
 
     return _loader
 
