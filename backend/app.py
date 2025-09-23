@@ -5,9 +5,11 @@ import numpy as np
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 import datetime
+import ipaddress
 import os
 from deepface import DeepFace
 from zoneinfo import ZoneInfo
+
 from ipaddress import ip_address
 
 try:
@@ -40,6 +42,55 @@ bucket = storage.bucket()  # Initialize storage bucket
 
 # Timezone for Central Time
 CENTRAL_TZ = ZoneInfo("America/Chicago")
+
+
+def _load_eaglenet_allowlist():
+    """Load the EagleNet IP allowlist from the environment."""
+
+    raw_allowlist = os.environ.get("EAGLENET_IP_ALLOWLIST", "")
+    networks = []
+    for entry in raw_allowlist.split(","):
+        candidate = entry.strip()
+        if not candidate:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(candidate, strict=False))
+        except ValueError:
+            continue
+
+    if not networks:
+        # Default to only allowing localhost when no configuration is supplied.
+        networks.append(ipaddress.ip_network("127.0.0.1/32"))
+
+    return networks
+
+
+EAGLENET_ALLOWLIST = _load_eaglenet_allowlist()
+
+
+def extract_request_ip(flask_request):
+    """Return the originating IP from X-Forwarded-For or remote_addr."""
+
+    forwarded_for = flask_request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        candidate = forwarded_for.split(",")[0].strip()
+        if candidate:
+            return candidate
+    return flask_request.remote_addr or ""
+
+
+def is_ip_allowlisted(ip_address):
+    try:
+        parsed_ip = ipaddress.ip_address(ip_address)
+    except ValueError:
+        return False
+
+    return any(parsed_ip in network for network in EAGLENET_ALLOWLIST)
+
+
+def is_request_from_eaglenet(flask_request):
+    ip_address = extract_request_ip(flask_request)
+    return bool(ip_address and is_ip_allowlisted(ip_address))
 
 def parse_time_12h(timestr):
     
@@ -80,6 +131,105 @@ def get_attendance_status(now_dt, start_dt, end_dt):
     else:
         return "Late", None
 
+
+def _resolve_record_id(payload):
+    record_id = payload.get("recordId")
+    if record_id:
+        return record_id
+
+    class_id = payload.get("classId")
+    student_id = payload.get("studentId")
+    date_str = payload.get("date")
+
+    if class_id and student_id and date_str:
+        return f"{class_id}_{student_id}_{date_str}"
+
+    return None
+
+
+@app.route("/api/attendance/finalize", methods=["POST"])
+def finalize_attendance():
+    payload = request.get_json(silent=True) or {}
+    record_id = _resolve_record_id(payload)
+
+    if not record_id:
+        return jsonify({
+            "status": "error",
+            "message": "Missing attendance record identifier."
+        }), 400
+
+    attendance_ref = db.collection("attendance").document(record_id)
+    snapshot = attendance_ref.get()
+
+    if not snapshot.exists:
+        return jsonify({
+            "status": "error",
+            "message": "Pending attendance record not found."
+        }), 404
+
+    record = snapshot.to_dict() or {}
+
+    if record.get("status") != "Pending":
+        return jsonify({
+            "status": "error",
+            "message": "Pending attendance record has expired."
+        }), 410
+
+    pending_status = record.get("pendingStatus")
+
+    if pending_status not in {"Present", "Late"}:
+        return jsonify({
+            "status": "error",
+            "message": "Pending attendance record is invalid."
+        }), 400
+
+    now_central = datetime.datetime.now(CENTRAL_TZ)
+
+    if not is_request_from_eaglenet(request):
+        rejection_reason = "Follow-up request must originate from EagleNet."
+        updates = {
+            "status": "Rejected",
+            "rejectionReason": rejection_reason,
+            "finalizedAt": now_central,
+        }
+
+        if "pendingStatus" in record:
+            updates["pendingStatus"] = firestore.DELETE_FIELD
+
+        attendance_ref.update(updates)
+
+        return jsonify({
+            "status": "rejected",
+            "message": rejection_reason,
+            "recordId": record_id,
+        }), 403
+
+    updates = {
+        "status": pending_status,
+        "finalizedAt": now_central,
+    }
+
+    if "pendingStatus" in record:
+        updates["pendingStatus"] = firestore.DELETE_FIELD
+
+    if "rejectionReason" in record:
+        updates["rejectionReason"] = firestore.DELETE_FIELD
+
+    attendance_ref.update(updates)
+
+    return jsonify({
+        "status": "success",
+        "message": "Attendance finalized.",
+        "recordId": record_id,
+        "finalStatus": pending_status,
+    }), 200
+
+
+@app.route("/api/face-recognition", methods=["POST", "OPTIONS"])
+def face_recognition():
+    if request.method == "OPTIONS":
+        return "", 200
+      
 def get_client_ip(req):
     """Extract the best-effort client IP address from the incoming request."""
     forwarded_for = req.headers.get("X-Forwarded-For", "")
@@ -102,7 +252,6 @@ def is_ip_allowed(ip_str):
     except ValueError:
         return False
     return any(client_ip in network for network in UNT_EAGLENET_NETWORKS)
-
 
 def _process_face_recognition_request():
     # Temporary filenames for the captured face and the known face downloaded from storage
