@@ -133,7 +133,7 @@ const StudentDashboard = () => {
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Review your attendance records for each course.</p>
           <div className="mt-6">
             <Link to="/student/classes" className="brand-button">
-              View history
+              View History
             </Link>
           </div>
         </section>
