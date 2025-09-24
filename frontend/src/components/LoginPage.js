@@ -106,7 +106,7 @@ const LoginPage = () => {
                     onChange={(event) => setEmail(event.target.value)}
                     required
                     className="w-full rounded-xl border border-slate-200/70 bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-unt-green focus:outline-none focus:ring-2 focus:ring-unt-green/30 dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-white"
-                    placeholder="your.name@unt.edu"
+                    placeholder="Enter your email"
                     autoComplete="email"
                   />
                 </div>

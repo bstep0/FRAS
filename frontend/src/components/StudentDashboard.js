@@ -205,7 +205,7 @@ const StudentDashboard = () => {
                     <p className="text-sm">Schedule: {classItem.schedule || "See syllabus"}</p>
                   </div>
                   <Link to={`/student/classes/${classItem.id}`} className="brand-button md:self-start">
-                    View class
+                    View Class
                   </Link>
                 </div>
               ))
