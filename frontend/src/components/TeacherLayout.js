@@ -86,10 +86,8 @@ const TeacherLayout = ({ title, headerActions, children }) => {
         <div className="absolute inset-0 bg-unt-gradient opacity-95" aria-hidden />
         <div className="relative flex h-full flex-col p-8">
           <div className="flex items-center gap-4">
-            <img src="/unt-logo.svg" alt="University of North Texas" className="h-12 w-auto" />
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">UNT</p>
-              <p className="text-lg font-semibold">Faculty Portal</p>
+              <p className="text-lg font-semibold">Facial Recognition Attendance System</p>
             </div>
           </div>
           <nav className="mt-10 space-y-2">
@@ -138,7 +136,7 @@ const TeacherLayout = ({ title, headerActions, children }) => {
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-b border-unt-green/10 bg-white/80 px-6 py-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-unt-green dark:text-unt-green/70">
-              Faculty Experience
+              Faculty Portal
             </p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{title}</h1>
           </div>

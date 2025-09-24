@@ -151,18 +151,16 @@ const TeacherDashboard = () => {
       <div className="space-y-8">
         <section className="glass-card">
           <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">
-            Welcome back, {teacherInfo?.name || "Teacher"}
+            Welcome, {teacherInfo?.name || "Teacher"}
           </h2>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-            Review your schedule, track attendance, and stay in touch with your students.
-          </p>
+
           <dl className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-unt-green/10 bg-white/90 p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900/70">
-              <dt className="text-sm font-medium text-slate-600 dark:text-slate-300">Active classes</dt>
+              <dt className="text-sm font-medium text-slate-600 dark:text-slate-300">Active Classes</dt>
               <dd className="mt-1 text-3xl font-semibold text-slate-900 dark:text-white">{classes.length}</dd>
             </div>
             <div className="rounded-2xl border border-unt-green/10 bg-white/90 p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900/70">
-              <dt className="text-sm font-medium text-slate-600 dark:text-slate-300">Enrolled students</dt>
+              <dt className="text-sm font-medium text-slate-600 dark:text-slate-300">Enrolled Students</dt>
               <dd className="mt-1 text-3xl font-semibold text-slate-900 dark:text-white">{totalStudents}</dd>
             </div>
           </dl>
@@ -172,10 +170,10 @@ const TeacherDashboard = () => {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">My Classes</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-300">Manage rosters, attendance, and messages for each course.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-300">View class rosters and manage attendance.</p>
             </div>
             <Link to="/teacher/classes" className="brand-button--ghost">
-              View all
+              View All
             </Link>
           </div>
           <div className="mt-6 space-y-4">
@@ -191,10 +189,10 @@ const TeacherDashboard = () => {
                     <p className="text-base font-semibold text-slate-900 dark:text-white">{classItem.name}</p>
                     <p className="text-sm">Room: {classItem.room || "TBD"}</p>
                     <p className="text-sm">Schedule: {classItem.schedule || "See syllabus"}</p>
-                    <p className="text-sm">Students enrolled: {classItem.studentCount}</p>
+                    <p className="text-sm">Students Enrolled: {classItem.studentCount}</p>
                   </div>
                   <Link to={`/teacher/classes/${classItem.id}`} className="brand-button md:self-start">
-                    Open class
+                    Open Class
                   </Link>
                 </div>
               ))
@@ -205,7 +203,7 @@ const TeacherDashboard = () => {
         </section>
 
         <section className="rounded-2xl border-2 border-dashed border-unt-green/30 bg-white/80 p-6 text-sm text-slate-600 shadow-inner dark:border-white/20 dark:bg-slate-900/60 dark:text-slate-300">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Recent attendance updates</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Recent Attendance Updates</h2>
           <p className="mt-2">
             Attendance activity from your classes will appear here as soon as students begin checking in.
           </p>

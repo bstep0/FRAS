@@ -124,9 +124,9 @@ const TeacherClasses = () => {
     <TeacherLayout title="My Classes">
       <div className="space-y-6">
         <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">All classes</h2>
+          <h2 className="text-xl font-semibold text-gray-900">All Classes</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Review rosters, manage attendance, and jump into the latest updates for each course you teach.
+            View class rosters and manage your class attendance.
           </p>
           <div className="mt-6 space-y-4">
             {isLoading ? (
@@ -147,7 +147,7 @@ const TeacherClasses = () => {
                     to={`/teacher/classes/${classItem.id}`}
                     className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                   >
-                    View class
+                    View Class
                   </Link>
                 </div>
               ))
@@ -158,9 +158,9 @@ const TeacherClasses = () => {
         </section>
 
         <section className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-sm text-gray-600 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900">Recent attendance updates</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Recent Attendance Updates</h3>
           <p className="mt-2">
-            Attendance summaries will appear here when your students start checking in.
+            Attendance updates will appear here when students begin checking in.
           </p>
         </section>
       </div>

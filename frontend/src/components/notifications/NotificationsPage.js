@@ -114,7 +114,7 @@ const NotificationsPage = ({ title = "Notifications" }) => {
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Inbox</h2>
             <p className="text-sm text-gray-600">
-              Review alerts, reminders, and updates from your instructors.
+              View your alerts, reminders, and updates here.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -165,7 +165,7 @@ const NotificationsPage = ({ title = "Notifications" }) => {
             <div className="px-6 py-10 text-center">
               <p className="text-base font-semibold text-gray-900">No notifications to show</p>
               <p className="mt-2 text-sm text-gray-600">
-                Stay tuned! Alerts from your instructors and school will appear here.
+                Stay tuned! Alerts will appear here.
               </p>
             </div>
           )}

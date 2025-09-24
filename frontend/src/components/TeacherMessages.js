@@ -159,7 +159,7 @@ const TeacherMessages = () => {
       <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold text-gray-900">Inbox</h2>
         <p className="mt-2 text-sm text-gray-600">
-          Review conversations with students to follow up on attendance questions and announcements.
+          Review conversations with students to follow up on attendance questions.
         </p>
         <div className="mt-6 space-y-4">
           {isLoading ? (
@@ -190,13 +190,13 @@ const TeacherMessages = () => {
                     to={`/teacher/messages/${thread.id}`}
                     className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                   >
-                    View conversation
+                    View Conversation
                   </Link>
                 </div>
               </div>
             ))
           ) : (
-            <p className="text-sm text-gray-500">No messages yet. Check back soon.</p>
+            <p className="text-sm text-gray-500">No existing messages at this time. </p>
           )}
         </div>
       </section>

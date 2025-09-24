@@ -14,7 +14,7 @@ import {
   where,
   Timestamp,
 } from "firebase/firestore";
-import { auth, db } from "../firebaseConfig"; // single import (no duplicates)
+import { auth, db } from "../firebaseConfig"; 
 import { useNotifications } from "../context/NotificationsContext";
 import ClassAttendanceChart from "./ClassAttendanceChart";
 import { EXPORT_ATTENDANCE_ENDPOINT } from "../config/api";
@@ -472,9 +472,9 @@ const TeacherClassView = () => {
 
         {/* Attendance snapshot */}
         <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">Attendance snapshot</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Attendance Overview</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Review class-wide attendance performance at a glance.
+            Review class-wide attendance at a glance.
           </p>
           <div className="mt-6 flex justify-start">
             <ClassAttendanceChart attendanceSummary={attendanceSummary} />
@@ -582,9 +582,6 @@ const TeacherClassView = () => {
             >
               {isExporting ? "Exporting…" : "Export Attendance"}
             </button>
-            <span className="text-sm text-gray-500">
-              Only teachers assigned to this class can export attendance data.
-            </span>
           </div>
 
           {exportFeedback && (
@@ -610,7 +607,7 @@ const TeacherClassView = () => {
 
             {/* Date */}
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Select date</label>
+              <label className="block text-sm font-medium text-gray-700">Select Date</label>
               <select
                 className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
                 value={selectedDate}
@@ -626,7 +623,7 @@ const TeacherClassView = () => {
 
             {/* Status */}
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Attendance status</label>
+              <label className="block text-sm font-medium text-gray-700">Attendance Status</label>
               <select
                 className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
                 value={attendanceStatus}
@@ -640,14 +637,14 @@ const TeacherClassView = () => {
             {/* Reason */}
             <div className="mt-4">
               <label className="mb-2 block text-sm font-medium text-gray-700">
-                Reason for edit (optional)
+                Reason For Edit (Optional)
               </label>
               <textarea
                 className="w-full resize-y rounded border p-2"
                 rows={3}
                 value={editReason}
                 onChange={(e) => setEditReason(e.target.value)}
-                placeholder="Explain why you're changing this record"
+
               />
             </div>
 

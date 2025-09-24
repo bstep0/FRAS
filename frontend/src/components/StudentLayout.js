@@ -88,10 +88,8 @@ const StudentLayout = ({ title, headerActions, children }) => {
         <div className="absolute inset-0 bg-unt-gradient opacity-95" aria-hidden />
         <div className="relative flex h-full flex-col p-8">
           <div className="flex items-center gap-4">
-            <img src="/unt-logo.svg" alt="University of North Texas" className="h-12 w-auto" />
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">UNT</p>
-              <p className="text-lg font-semibold">Attendance Hub</p>
+              <p className="text-lg font-semibold">Facial Recognition Attendance System</p>
             </div>
           </div>
           <nav className="mt-10 space-y-2">
@@ -129,7 +127,7 @@ const StudentLayout = ({ title, headerActions, children }) => {
                 />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-white">{displayName || "Student"}</p>
-                  <p className="truncate text-xs text-white/70">{email || "student@unt.edu"}</p>
+                  <p className="truncate text-xs text-white/70">{email || "student@my.unt.edu"}</p>
                 </div>
               </div>
             </div>
