@@ -3,24 +3,73 @@ import { Link, useLocation } from "react-router-dom";
 import NotificationsBell from "./notifications/NotificationsBell";
 import NotificationBanner from "./notifications/NotificationBanner";
 import NotificationToast from "./notifications/NotificationToast";
+import ThemeToggle from "./ThemeToggle";
 import { useNotifications } from "../context/NotificationsContext";
+import useUserProfile from "../hooks/useUserProfile";
+
+const iconClass = "h-5 w-5";
 
 const navigationItems = [
   {
     label: "Dashboard",
-    icon: "📌",
+    icon: (
+      <svg
+        className={iconClass}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M3 13h8V3H3z" />
+        <path d="M13 21h8v-8h-8z" />
+        <path d="M13 3h8v6h-8z" />
+        <path d="M3 21h8v-6H3z" />
+      </svg>
+    ),
     to: "/teacher",
     isActive: (pathname) => pathname === "/teacher",
   },
   {
     label: "My Classes",
-    icon: "📚",
+    icon: (
+      <svg
+        className={iconClass}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+        <path d="M13 3v5h5" />
+        <path d="M8 13h6" />
+        <path d="M8 17h6" />
+      </svg>
+    ),
     to: "/teacher/classes",
     isActive: (pathname) => pathname.startsWith("/teacher/classes"),
   },
   {
     label: "Messages",
-    icon: "💬",
+    icon: (
+      <svg
+        className={iconClass}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+    ),
     to: "/teacher/messages",
     isActive: (pathname) => pathname.startsWith("/teacher/messages"),
   },
@@ -28,44 +77,79 @@ const navigationItems = [
 
 const TeacherLayout = ({ title, headerActions, children }) => {
   const location = useLocation();
-  const { bannerNotification, dismissBanner, toastNotification, dismissToast } =
-    useNotifications();
+  const { bannerNotification, dismissBanner, toastNotification, dismissToast } = useNotifications();
+  const { displayName, email } = useUserProfile();
 
   return (
-    <div className="flex min-h-screen bg-gray-100 text-gray-900">
-      <aside className="flex w-64 flex-shrink-0 flex-col border-r bg-white p-6 shadow-sm">
-        <img src="/logo.png" alt="Face Recognition" className="w-24 self-center" />
-        <h2 className="mt-6 text-xl font-semibold">Attendance System</h2>
-        <nav className="mt-8 space-y-2">
-          {navigationItems.map((item) => {
-            const active = item.isActive(location.pathname);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition hover:bg-gray-100 ${
-                  active ? "bg-gray-200 text-gray-900" : "text-gray-700"
-                }`}
-              >
-                <span aria-hidden>{item.icon}</span>
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+    <div className="flex min-h-screen bg-transparent text-slate-900 transition-colors duration-300 dark:text-slate-100">
+      <aside className="relative flex w-72 flex-shrink-0 flex-col overflow-hidden border-r border-unt-green/10 bg-unt-forest text-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+        <div className="absolute inset-0 bg-unt-gradient opacity-95" aria-hidden />
+        <div className="relative flex h-full flex-col p-8">
+          <div className="flex items-center gap-4">
+            <img src="/unt-logo.svg" alt="University of North Texas" className="h-12 w-auto" />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">UNT</p>
+              <p className="text-lg font-semibold">Faculty Portal</p>
+            </div>
+          </div>
+          <nav className="mt-10 space-y-2">
+            {navigationItems.map((item) => {
+              const active = item.isActive(location.pathname);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  aria-current={active ? "page" : undefined}
+                  className={`group flex items-center gap-4 rounded-2xl px-4 py-3 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/80 ${
+                    active ? "bg-white/20 text-white shadow-lg" : "hover:bg-white/10 text-white/80 hover:text-white"
+                  }`}
+                >
+                  <span
+                    className={`flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white transition group-hover:border-white/40 group-hover:bg-white/20 ${
+                      active ? "border-white/60 bg-white/25" : ""
+                    }`}
+                    aria-hidden
+                  >
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="mt-auto pt-8">
+            <div className="rounded-2xl border border-white/20 bg-white/10 p-4 shadow-lg backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <img
+                  src="/profile-placeholder.svg"
+                  alt={`${displayName || "Faculty"} profile`}
+                  className="h-12 w-12 rounded-full border-2 border-white object-cover shadow-md"
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">{displayName || "Faculty"}</p>
+                  <p className="truncate text-xs text-white/70">{email || "faculty@unt.edu"}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </aside>
       <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
+        <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-b border-unt-green/10 bg-white/80 px-6 py-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-unt-green dark:text-unt-green/70">
+              Faculty Experience
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{title}</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {headerActions}
+            <ThemeToggle />
             <NotificationsBell />
           </div>
         </header>
-        <main className="relative flex-1 overflow-y-auto p-6">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+        <main className="relative flex-1 overflow-y-auto px-4 py-8 sm:px-8">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
             {bannerNotification ? (
               <NotificationBanner
                 notification={bannerNotification}
