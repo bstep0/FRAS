@@ -1,17 +1,106 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-}
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --surface-color: #f1f5f4;
+    --surface-strong: #ffffff;
+    --surface-muted: rgba(0, 133, 61, 0.08);
+    --border-subtle: rgba(0, 133, 61, 0.12);
+  }
+
+  .dark {
+    --surface-color: #0b1324;
+    --surface-strong: #111a2f;
+    --surface-muted: rgba(0, 165, 80, 0.18);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(15, 118, 110, 0.35) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 133, 61, 0.4);
+    border-radius: 999px;
+  }
+
+  body {
+    margin: 0;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont,
+      'Roboto', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: rgba(15, 23, 42, 0.92);
+    background-color: var(--surface-color);
+    background-image: linear-gradient(
+        180deg,
+        rgba(0, 133, 61, 0.04) 0%,
+        rgba(255, 255, 255, 0) 55%
+      ),
+      linear-gradient(120deg, rgba(0, 165, 80, 0.08), rgba(0, 133, 61, 0));
+    transition: background-color 0.35s ease, color 0.35s ease;
+  }
+
+  .dark body {
+    color: rgba(241, 245, 249, 0.95);
+    background-color: var(--surface-color);
+    background-image: linear-gradient(
+        180deg,
+        rgba(0, 133, 61, 0.12) 0%,
+        rgba(0, 0, 0, 0) 55%
+      ),
+      linear-gradient(140deg, rgba(15, 23, 42, 0.85), rgba(17, 24, 39, 0.9));
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
+  }
+
+  code {
+    font-family: 'Fira Code', 'SFMono-Regular', Menlo, Monaco, Consolas,
+      'Liberation Mono', 'Courier New', monospace;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply rounded-2xl border border-white/40 bg-white/80 p-6 shadow-lg backdrop-blur-md transition-all duration-300 dark:border-slate-700/70 dark:bg-slate-900/70;
+  }
+
+  .glass-card:hover {
+    @apply shadow-brand;
+  }
+
+  .dark .glass-card:hover {
+    box-shadow: 0 25px 55px -20px rgba(0, 165, 80, 0.35);
+  }
+
+  .brand-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-unt-green px-5 py-2 text-sm font-semibold tracking-wide text-white shadow-brand transition-colors duration-200 hover:bg-unt-greenDark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-unt-accent disabled:opacity-60 disabled:shadow-none;
+  }
+
+  .brand-button--ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-unt-green/40 bg-transparent px-5 py-2 text-sm font-semibold tracking-wide text-unt-green transition-colors duration-200 hover:border-unt-green hover:text-unt-greenDark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-unt-accent dark:border-white/20 dark:text-white dark:hover:border-white/50;
+  }
+
+  .brand-chip {
+    @apply inline-flex items-center gap-2 rounded-full bg-unt-green/10 px-3 py-1 text-xs font-medium uppercase tracking-wide text-unt-green dark:bg-unt-green/20 dark:text-unt-green;
+  }
+}

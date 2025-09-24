@@ -128,50 +128,47 @@ const StudentDashboard = () => {
   return (
     <StudentLayout title="Dashboard">
       <div className="space-y-8">
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">Attendance History</h2>
-          <p className="mt-2 text-sm text-gray-600">Review your attendance records for each course.</p>
-          <div className="mt-4">
-            <Link
-              to="/student/classes"
-              className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              View History
+        <section className="glass-card">
+          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Attendance History</h2>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Review your attendance records for each course.</p>
+          <div className="mt-6">
+            <Link to="/student/classes" className="brand-button">
+              View history
             </Link>
           </div>
         </section>
 
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">Record Attendance</h2>
-          <p className="mt-2 text-sm text-gray-600">Scan your face to mark your attendance for a class.</p>
-          <div className="mt-4 flex flex-col gap-4">
+        <section className="glass-card">
+          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Record Attendance</h2>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Scan your face to mark your attendance for a class.</p>
+          <div className="mt-6 flex flex-col gap-5">
             <button
               type="button"
               onClick={() => setShowScanFlow((prev) => !prev)}
-              className="inline-flex w-full items-center justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 md:w-auto"
+              className={`${showScanFlow ? "brand-button--ghost" : "brand-button"} w-full justify-center md:w-auto`}
             >
-              {showScanFlow ? "Cancel" : "Start Scan"}
+              {showScanFlow ? "Cancel" : "Start scan"}
             </button>
 
             {showScanFlow ? (
-              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                <h3 className="text-lg font-semibold text-gray-900">Select Class</h3>
-                <p className="mt-1 text-sm text-gray-600">Choose the class you want to check in for and begin scanning.</p>
+              <div className="rounded-2xl border border-unt-green/10 bg-white/90 p-5 shadow-inner dark:border-slate-700/60 dark:bg-slate-900/70">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Select class</h3>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Choose the class you want to check in for and begin scanning.</p>
                 <select
                   value={selectedClass}
                   onChange={(event) => setSelectedClass(event.target.value)}
-                  className="mt-4 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
+                  className="mt-4 w-full rounded-xl border border-slate-200/70 bg-white/90 px-4 py-2 text-sm text-slate-900 shadow-sm transition focus:border-unt-green focus:outline-none focus:ring-2 focus:ring-unt-green/30 dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-white"
                 >
-                  <option value="">-- Select a class --</option>
+                  <option value="">Select a class</option>
                   {classes.map((cls) => (
                     <option key={cls.id} value={cls.id}>
-                      {cls.id} - {cls.name}
+                      {cls.id} · {cls.name}
                     </option>
                   ))}
                 </select>
 
                 {selectedClass ? (
-                  <div className="mt-4">
+                  <div className="mt-4 rounded-2xl border border-unt-green/10 bg-white/90 p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900/70">
                     <FaceScanner selectedClass={selectedClass} studentId={studentId} />
                   </div>
                 ) : null}
@@ -180,43 +177,40 @@ const StudentDashboard = () => {
           </div>
         </section>
 
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">My Classes</h2>
-            <Link
-              to="/student/classes"
-              className="text-sm font-medium text-blue-600 hover:text-blue-800"
-            >
+        <section className="glass-card">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">My Classes</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-300">Quick access to the courses you are enrolled in this term.</p>
+            </div>
+            <Link to="/student/classes" className="brand-button--ghost">
               View all
             </Link>
           </div>
-          <div className="mt-4 space-y-4">
+          <div className="mt-6 space-y-4">
             {isLoadingClasses ? (
-              <p className="text-sm text-gray-500">Loading classes…</p>
+              <p className="text-sm text-slate-500 dark:text-slate-300">Loading classes…</p>
             ) : hasClasses ? (
               classes.map((classItem) => (
                 <div
                   key={classItem.id}
-                  className="flex flex-col gap-2 rounded-md border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700 shadow-sm md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-2xl border border-unt-green/10 bg-white/90 p-5 text-sm text-slate-700 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-slate-200 md:flex-row md:items-center md:justify-between"
                 >
-                  <div>
-                    <p className="text-base font-semibold text-gray-900">
-                      {classItem.id} - {classItem.name}
+                  <div className="space-y-1">
+                    <p className="text-base font-semibold text-slate-900 dark:text-white">
+                      {classItem.id} · {classItem.name}
                     </p>
-                    <p>Teacher: {classItem.teacher || "TBD"}</p>
-                    <p>Room: {classItem.room || "TBD"}</p>
-                    <p>Scheduled Time: {classItem.schedule || "See syllabus"}</p>
+                    <p className="text-sm">Instructor: {classItem.teacher || "TBD"}</p>
+                    <p className="text-sm">Room: {classItem.room || "TBD"}</p>
+                    <p className="text-sm">Schedule: {classItem.schedule || "See syllabus"}</p>
                   </div>
-                  <Link
-                    to={`/student/classes/${classItem.id}`}
-                    className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                  >
+                  <Link to={`/student/classes/${classItem.id}`} className="brand-button md:self-start">
                     View class
                   </Link>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-gray-500">No enrolled classes found.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-300">No enrolled classes found.</p>
             )}
           </div>
         </section>

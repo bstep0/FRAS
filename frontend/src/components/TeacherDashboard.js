@@ -149,68 +149,63 @@ const TeacherDashboard = () => {
   return (
     <TeacherLayout title="Dashboard">
       <div className="space-y-8">
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">
+        <section className="glass-card">
+          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">
             Welcome back, {teacherInfo?.name || "Teacher"}
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
             Review your schedule, track attendance, and stay in touch with your students.
           </p>
           <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-md border border-gray-100 bg-gray-50 p-4">
-              <dt className="text-sm font-medium text-gray-600">Active classes</dt>
-              <dd className="mt-1 text-2xl font-semibold text-gray-900">{classes.length}</dd>
+            <div className="rounded-2xl border border-unt-green/10 bg-white/90 p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900/70">
+              <dt className="text-sm font-medium text-slate-600 dark:text-slate-300">Active classes</dt>
+              <dd className="mt-1 text-3xl font-semibold text-slate-900 dark:text-white">{classes.length}</dd>
             </div>
-            <div className="rounded-md border border-gray-100 bg-gray-50 p-4">
-              <dt className="text-sm font-medium text-gray-600">Enrolled students</dt>
-              <dd className="mt-1 text-2xl font-semibold text-gray-900">{totalStudents}</dd>
+            <div className="rounded-2xl border border-unt-green/10 bg-white/90 p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900/70">
+              <dt className="text-sm font-medium text-slate-600 dark:text-slate-300">Enrolled students</dt>
+              <dd className="mt-1 text-3xl font-semibold text-slate-900 dark:text-white">{totalStudents}</dd>
             </div>
           </dl>
         </section>
 
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">My Classes</h2>
-            <Link
-              to="/teacher/classes"
-              className="text-sm font-medium text-blue-600 hover:text-blue-800"
-            >
+        <section className="glass-card">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">My Classes</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-300">Manage rosters, attendance, and messages for each course.</p>
+            </div>
+            <Link to="/teacher/classes" className="brand-button--ghost">
               View all
             </Link>
           </div>
-          <div className="mt-4 space-y-4">
+          <div className="mt-6 space-y-4">
             {isLoadingClasses ? (
-              <p className="text-sm text-gray-500">Loading your classes…</p>
+              <p className="text-sm text-slate-500 dark:text-slate-300">Loading your classes…</p>
             ) : hasClasses ? (
               classes.map((classItem) => (
                 <div
                   key={classItem.id}
-                  className="flex flex-col gap-2 rounded-md border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700 shadow-sm md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-2xl border border-unt-green/10 bg-white/90 p-5 text-sm text-slate-700 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-slate-200 md:flex-row md:items-center md:justify-between"
                 >
-                  <div>
-                    <p className="text-base font-semibold text-gray-900">
-                      {classItem.name}
-                    </p>
-                    <p>Room: {classItem.room || "TBD"}</p>
-                    <p>Schedule: {classItem.schedule || "See syllabus"}</p>
-                    <p>Students enrolled: {classItem.studentCount}</p>
+                  <div className="space-y-1">
+                    <p className="text-base font-semibold text-slate-900 dark:text-white">{classItem.name}</p>
+                    <p className="text-sm">Room: {classItem.room || "TBD"}</p>
+                    <p className="text-sm">Schedule: {classItem.schedule || "See syllabus"}</p>
+                    <p className="text-sm">Students enrolled: {classItem.studentCount}</p>
                   </div>
-                  <Link
-                    to={`/teacher/classes/${classItem.id}`}
-                    className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                  >
+                  <Link to={`/teacher/classes/${classItem.id}`} className="brand-button md:self-start">
                     Open class
                   </Link>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-gray-500">No classes assigned yet.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-300">No classes assigned yet.</p>
             )}
           </div>
         </section>
 
-        <section className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-sm text-gray-600 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Recent attendance updates</h2>
+        <section className="rounded-2xl border-2 border-dashed border-unt-green/30 bg-white/80 p-6 text-sm text-slate-600 shadow-inner dark:border-white/20 dark:bg-slate-900/60 dark:text-slate-300">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Recent attendance updates</h2>
           <p className="mt-2">
             Attendance activity from your classes will appear here as soon as students begin checking in.
           </p>

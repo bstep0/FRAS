@@ -5,6 +5,29 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import StudentLayout from "./StudentLayout";
 import { useNotifications } from "../context/NotificationsContext";
 
+const statusStyles = {
+  Present: {
+    label: "Present",
+    tone: "text-unt-green",
+    dot: "bg-unt-green",
+  },
+  Absent: {
+    label: "Absent",
+    tone: "text-red-500",
+    dot: "bg-red-500",
+  },
+  Late: {
+    label: "Late",
+    tone: "text-amber-500",
+    dot: "bg-amber-500",
+  },
+  Unknown: {
+    label: "No record",
+    tone: "text-slate-400",
+    dot: "bg-slate-400",
+  },
+};
+
 const StudentClassView = () => {
   const { classId } = useParams();
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -165,35 +188,54 @@ const StudentClassView = () => {
   return (
     <StudentLayout title={`Attendance for ${classId}`}>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <Link to="/student/classes" className="text-sm font-medium text-blue-600 hover:text-blue-800">
-            ← Back to classes
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link
+            to="/student/classes"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-unt-green transition hover:text-unt-greenDark"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              <path d="m15 18-6-6 6-6" />
+              <path d="M21 12H9" />
+            </svg>
+            Back to classes
           </Link>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="brand-button--ghost"
             >
               Previous
             </button>
             <button
               type="button"
               onClick={handleNextMonth}
-              className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="brand-button"
             >
               Next
             </button>
           </div>
         </div>
 
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="glass-card">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-2xl font-semibold text-gray-900">Attendance Calendar</h2>
-            <p className="text-sm text-gray-600">{monthYearText}</p>
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Attendance Calendar</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-300">{monthYearText}</p>
+            </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-7 gap-2 text-center text-sm font-semibold text-gray-600">
+          <div className="mt-6 grid grid-cols-7 gap-3 text-center text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
             <div>Sun</div>
             <div>Mon</div>
             <div>Tue</div>
@@ -203,54 +245,60 @@ const StudentClassView = () => {
             <div>Sat</div>
           </div>
 
-          <div className="mt-2 grid grid-cols-7 gap-2">
+          <div className="mt-2 grid grid-cols-7 gap-3">
             {days.map((dayObj, idx) => {
               const { date, isCurrentMonth, status } = dayObj;
-              let statusLabel = "⬜";
-              let textColor = isCurrentMonth ? "text-gray-700" : "text-gray-400";
-
-              if (status === "Present") {
-                statusLabel = "Present ✅";
-                textColor = isCurrentMonth ? "text-green-600" : "text-green-400";
-              } else if (status === "Absent") {
-                statusLabel = "Absent ❌";
-                textColor = isCurrentMonth ? "text-red-600" : "text-red-400";
-              } else if (status === "Late") {
-                statusLabel = "Late ⚠️";
-                textColor = isCurrentMonth ? "text-yellow-500" : "text-yellow-300";
-              }
-
+              const meta = statusStyles[status] || statusStyles.Unknown;
               const isSelected =
-                selectedDate &&
-                selectedDate.date.toDateString() === date.toDateString()
-                  ? "border-2 border-blue-400"
-                  : "";
+                selectedDate && selectedDate.date.toDateString() === date.toDateString();
+
+              const baseClasses = [
+                "flex flex-col items-center justify-between rounded-2xl border p-3 text-sm transition",
+                "bg-white/90 text-slate-700 shadow-sm hover:border-unt-green/40 hover:shadow-brand dark:bg-slate-900/70 dark:text-slate-200",
+                isCurrentMonth ? "border-unt-green/10" : "border-slate-200/60 opacity-60 dark:border-slate-700/60",
+                isSelected ? "ring-2 ring-unt-green" : "",
+              ].join(" ");
 
               return (
                 <button
                   key={`${date.toISOString()}-${idx}`}
                   type="button"
                   onClick={() => handleDateClick({ date, status })}
-                  className={`flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm font-medium hover:bg-gray-100 ${textColor} ${isSelected}`}
+                  className={baseClasses}
                 >
-                  <span>{date.getDate()}</span>
-                  <span className="mt-1 text-xs">{statusLabel}</span>
+                  <span className="text-lg font-semibold">{date.getDate()}</span>
+                  <span className={`mt-2 inline-flex items-center gap-2 text-xs font-medium ${meta.tone}`}>
+                    <span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} aria-hidden />
+                    {meta.label}
+                  </span>
                 </button>
               );
             })}
           </div>
 
+          <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-300">
+            {Object.values(statusStyles).map((meta) => (
+              <span key={meta.label} className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 dark:bg-slate-900/60">
+                <span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} aria-hidden />
+                <span className={meta.tone}>{meta.label}</span>
+              </span>
+            ))}
+          </div>
+
           {isLoading ? (
-            <p className="mt-4 text-sm text-gray-500">Loading attendance records…</p>
+            <p className="mt-6 text-sm text-slate-500 dark:text-slate-300">Loading attendance records…</p>
           ) : null}
         </section>
 
         {selectedDate ? (
-          <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-semibold text-gray-900">
+          <section className="glass-card">
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
               Details for {selectedDate.date.toLocaleDateString("en-US")}
             </h3>
-            <p className="mt-2 text-sm text-gray-600">Status: {selectedDate.status}</p>
+            <p className="mt-2 inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+              <span className={`h-2.5 w-2.5 rounded-full ${statusStyles[selectedDate.status]?.dot || statusStyles.Unknown.dot}`} aria-hidden />
+              {statusStyles[selectedDate.status]?.label || statusStyles.Unknown.label}
+            </p>
           </section>
         ) : null}
       </div>
