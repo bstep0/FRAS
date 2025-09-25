@@ -31,6 +31,7 @@ function App() {
           <Route path="/teacher/messages/:messageId" element={<TeacherMessageView />} />
           <Route path="/teacher/classes" element={<TeacherClasses />} />
           <Route path="/teacher/classes/:className" element={<TeacherClassView />} />
+          <Route path="/teacher/notifications" element={<NotificationsPage title="Notifications" />} />
 
           {/* Student Routes */}
           <Route path="/student" element={<StudentDashboard />} />

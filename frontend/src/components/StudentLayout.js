@@ -4,6 +4,8 @@ import NotificationsBell from "./notifications/NotificationsBell";
 import NotificationBanner from "./notifications/NotificationBanner";
 import NotificationToast from "./notifications/NotificationToast";
 import ThemeToggle from "./ThemeToggle";
+import RefreshButton from "./RefreshButton";
+import SignOutButton from "./SignOutButton";
 import { useNotifications } from "../context/NotificationsContext";
 import useUserProfile from "../hooks/useUserProfile";
 
@@ -142,9 +144,11 @@ const StudentLayout = ({ title, headerActions, children }) => {
             </p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{title}</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {headerActions}
+            <RefreshButton />
             <ThemeToggle />
+            <SignOutButton />
             <NotificationsBell />
           </div>
         </header>

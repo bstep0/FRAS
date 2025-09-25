@@ -4,6 +4,8 @@ import NotificationsBell from "./notifications/NotificationsBell";
 import NotificationBanner from "./notifications/NotificationBanner";
 import NotificationToast from "./notifications/NotificationToast";
 import ThemeToggle from "./ThemeToggle";
+import RefreshButton from "./RefreshButton";
+import SignOutButton from "./SignOutButton";
 import { useNotifications } from "../context/NotificationsContext";
 import useUserProfile from "../hooks/useUserProfile";
 
@@ -53,6 +55,26 @@ const navigationItems = [
     ),
     to: "/teacher/classes",
     isActive: (pathname) => pathname.startsWith("/teacher/classes"),
+  },
+  {
+    label: "Notifications",
+    icon: (
+      <svg
+        className={iconClass}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    ),
+    to: "/teacher/notifications",
+    isActive: (pathname) => pathname.startsWith("/teacher/notifications"),
   },
   {
     label: "Messages",
@@ -140,9 +162,11 @@ const TeacherLayout = ({ title, headerActions, children }) => {
             </p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{title}</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {headerActions}
+            <RefreshButton />
             <ThemeToggle />
+            <SignOutButton />
             <NotificationsBell />
           </div>
         </header>
