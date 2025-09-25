@@ -4,7 +4,6 @@ import NotificationsBell from "./notifications/NotificationsBell";
 import NotificationBanner from "./notifications/NotificationBanner";
 import NotificationToast from "./notifications/NotificationToast";
 import ThemeToggle from "./ThemeToggle";
-import RefreshButton from "./RefreshButton";
 import SignOutButton from "./SignOutButton";
 import { useNotifications } from "../context/NotificationsContext";
 import useUserProfile from "../hooks/useUserProfile";
@@ -146,7 +145,6 @@ const StudentLayout = ({ title, headerActions, children }) => {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {headerActions}
-            <RefreshButton />
             <ThemeToggle />
             <SignOutButton />
             <NotificationsBell />

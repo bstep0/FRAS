@@ -4,7 +4,6 @@ import NotificationsBell from "./notifications/NotificationsBell";
 import NotificationBanner from "./notifications/NotificationBanner";
 import NotificationToast from "./notifications/NotificationToast";
 import ThemeToggle from "./ThemeToggle";
-import RefreshButton from "./RefreshButton";
 import SignOutButton from "./SignOutButton";
 import { useNotifications } from "../context/NotificationsContext";
 import useUserProfile from "../hooks/useUserProfile";
@@ -76,25 +75,6 @@ const navigationItems = [
     to: "/teacher/notifications",
     isActive: (pathname) => pathname.startsWith("/teacher/notifications"),
   },
-  {
-    label: "Messages",
-    icon: (
-      <svg
-        className={iconClass}
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-    ),
-    to: "/teacher/messages",
-    isActive: (pathname) => pathname.startsWith("/teacher/messages"),
-  },
 ];
 
 const TeacherLayout = ({ title, headerActions, children }) => {
@@ -164,7 +144,6 @@ const TeacherLayout = ({ title, headerActions, children }) => {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {headerActions}
-            <RefreshButton />
             <ThemeToggle />
             <SignOutButton />
             <NotificationsBell />

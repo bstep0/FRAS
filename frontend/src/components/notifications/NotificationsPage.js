@@ -183,37 +183,6 @@ const NotificationsPage = ({ title = "Notifications" }) => {
             >
               Mark all as read
             </button>
-            {typeof createTestNotification === "function" ? (
-              <button
-                type="button"
-                onClick={async () => {
-                  setIsCreatingTest(true);
-                  try {
-                    const audience = isTeacherView ? "teachers" : "students";
-                    const tone = isTeacherView ? "success" : "info";
-                    await createTestNotification({ audience, tone });
-                    pushToast({
-                      tone: "success",
-                      title: "Test notification sent",
-                      message: "Check the inbox below to confirm delivery.",
-                    });
-                  } catch (error) {
-                    console.error("Failed to create test notification", error);
-                    pushToast({
-                      tone: "error",
-                      title: "Unable to send notification",
-                      message: "We couldn't send a test notification. Please try again.",
-                    });
-                  } finally {
-                    setIsCreatingTest(false);
-                  }
-                }}
-                className="rounded-full border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700 transition hover:border-blue-300 hover:text-blue-900 dark:border-blue-400/40 dark:text-blue-100 dark:hover:border-blue-300/60 dark:hover:text-blue-50"
-                disabled={isCreatingTest}
-              >
-                {isCreatingTest ? "Sending…" : "Send test notification"}
-              </button>
-            ) : null}
           </div>
         </div>
 

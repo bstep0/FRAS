@@ -6,10 +6,8 @@ import StudentDashboard from "./components/StudentDashboard";
 import StudentClasses from "./components/StudentClasses";
 import StudentMessages from "./components/StudentMessages";
 import LoginPage from "./components/LoginPage";
-import TeacherMessages from "./components/TeacherMessages";
 import TeacherClasses from "./components/TeacherClasses";
 import TeacherClassView from "./components/TeacherClassView";
-import TeacherMessageView from "./components/TeacherMessageView";
 import StudentClassView from "./components/StudentClassView";
 import NotificationsPage from "./components/notifications/NotificationsPage";
 import { NotificationsProvider } from "./context/NotificationsContext";
@@ -27,8 +25,6 @@ function App() {
 
           {/* Teacher Routes */}
           <Route path="/teacher" element={<TeacherDashboard />} />
-          <Route path="/teacher/messages" element={<TeacherMessages />} />
-          <Route path="/teacher/messages/:messageId" element={<TeacherMessageView />} />
           <Route path="/teacher/classes" element={<TeacherClasses />} />
           <Route path="/teacher/classes/:className" element={<TeacherClassView />} />
           <Route path="/teacher/notifications" element={<NotificationsPage title="Notifications" />} />
