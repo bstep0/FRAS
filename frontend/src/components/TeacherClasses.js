@@ -123,42 +123,42 @@ const TeacherClasses = () => {
   return (
     <TeacherLayout title="My Classes">
       <div className="space-y-6">
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">All Classes</h2>
-          <p className="mt-2 text-sm text-gray-600">
+        <section className="glass-card">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">All Classes</h2>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
             View class rosters and manage your class attendance.
           </p>
           <div className="mt-6 space-y-4">
             {isLoading ? (
-              <p className="text-sm text-gray-500">Loading classes…</p>
+              <p className="text-sm text-slate-500 dark:text-slate-300">Loading classes…</p>
             ) : classes.length ? (
               classes.map((classItem) => (
                 <div
                   key={classItem.id}
-                  className="flex flex-col gap-2 rounded-md border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700 shadow-sm md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-2xl border border-unt-green/10 bg-white/90 p-5 text-sm text-slate-700 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-slate-200 md:flex-row md:items-center md:justify-between"
                 >
-                  <div>
-                    <p className="text-base font-semibold text-gray-900">{classItem.name}</p>
+                  <div className="space-y-1">
+                    <p className="text-base font-semibold text-slate-900 dark:text-white">{classItem.name}</p>
                     <p>Room: {classItem.room || "TBD"}</p>
                     <p>Schedule: {classItem.schedule || "See syllabus"}</p>
                     <p>Students enrolled: {classItem.studentCount}</p>
                   </div>
                   <Link
                     to={`/teacher/classes/${classItem.id}`}
-                    className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                    className="brand-button md:self-start"
                   >
                     View Class
                   </Link>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-gray-500">No classes assigned yet.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-300">No classes assigned yet.</p>
             )}
           </div>
         </section>
 
-        <section className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-sm text-gray-600 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900">Recent Attendance Updates</h3>
+        <section className="glass-card text-sm text-slate-600 dark:text-slate-300">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Recent Attendance Updates</h3>
           <p className="mt-2">
             Attendance updates will appear here when students begin checking in.
           </p>

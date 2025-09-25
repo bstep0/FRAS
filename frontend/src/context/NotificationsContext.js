@@ -10,12 +10,14 @@ import React, {
 import {
   collection,
   doc,
+  addDoc,
   getDocs,
   onSnapshot,
   query,
   updateDoc,
   where,
   writeBatch,
+  serverTimestamp,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseConfig";
@@ -136,6 +138,7 @@ export const NotificationsProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(() => auth.currentUser);
   const [userDocId, setUserDocId] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   const [dismissedBannerIds, setDismissedBannerIds] = useState([]);
   const [dismissedToastIds, setDismissedToastIds] = useState([]);
   const [toastQueue, setToastQueue] = useState([]);
@@ -154,6 +157,7 @@ export const NotificationsProvider = ({ children }) => {
     const resolveUserDoc = async () => {
       if (!currentUser?.email) {
         setUserDocId(null);
+        setUserRole(null);
         return;
       }
       try {
@@ -161,12 +165,29 @@ export const NotificationsProvider = ({ children }) => {
         const emailQuery = query(usersRef, where("email", "==", currentUser.email));
         const userSnapshot = await getDocs(emailQuery);
         if (!isCancelled) {
-          setUserDocId(userSnapshot.empty ? null : userSnapshot.docs[0].id);
+          if (userSnapshot.empty) {
+            setUserDocId(null);
+            setUserRole(null);
+          } else {
+            const docSnapshot = userSnapshot.docs[0];
+            const profileData = docSnapshot.data() || {};
+            const rawRole =
+              profileData.role ||
+              profileData.type ||
+              profileData.accountType ||
+              profileData.userType ||
+              "";
+            const normalizedRole = rawRole ? String(rawRole).toLowerCase() : null;
+
+            setUserDocId(docSnapshot.id);
+            setUserRole(normalizedRole);
+          }
         }
       } catch (error) {
         console.error("Failed to resolve user document for notifications", error);
         if (!isCancelled) {
           setUserDocId(null);
+          setUserRole(null);
         }
       }
     };
@@ -180,15 +201,31 @@ export const NotificationsProvider = ({ children }) => {
 
   useEffect(() => {
     aggregatedSnapshotsRef.current = new Map();
-  }, [currentUser, userDocId]);
+  }, [currentUser, userDocId, userRole]);
 
-  useEffect(() => {
-    if (!currentUser) {
-      setNotifications([]);
-      setLoading(false);
-      return undefined;
+  const audienceValues = useMemo(() => {
+    const values = new Set(["all", "everyone", "public"]);
+
+    if (userRole) {
+      values.add(userRole);
+      values.add(`${userRole}s`);
     }
 
+    const email = currentUser?.email || "";
+    if (email.includes("@my.unt.edu")) {
+      values.add("student");
+      values.add("students");
+    }
+    if (email.includes("@unt.edu")) {
+      values.add("teacher");
+      values.add("teachers");
+      values.add("faculty");
+    }
+
+    return Array.from(values).filter(Boolean);
+  }, [currentUser, userRole]);
+
+  useEffect(() => {
     const notificationsRef = collection(db, "notifications");
     const unsubscribers = [];
     const aggregated = aggregatedSnapshotsRef.current;
@@ -219,30 +256,45 @@ export const NotificationsProvider = ({ children }) => {
       setLoading(false);
     };
 
-    const idCandidates = Array.from(
-      new Set([
-        userDocId,
-        currentUser?.uid || null,
-      ].filter(Boolean))
-    );
+    let hasSubscription = false;
 
-    if (idCandidates.length > 0) {
-      const idQuery = query(
-        notificationsRef,
-        where("userId", "in", idCandidates.slice(0, 10))
-      );
-      unsubscribers.push(onSnapshot(idQuery, handleSnapshot, handleError));
+    const subscribeToConstraints = (...constraints) => {
+      try {
+        if (!constraints.length) return;
+        const builtQuery = query(notificationsRef, ...constraints);
+        unsubscribers.push(onSnapshot(builtQuery, handleSnapshot, handleError));
+        hasSubscription = true;
+      } catch (error) {
+        console.error("Failed to subscribe to notifications", error);
+      }
+    };
+
+    const generalAudiences = audienceValues.slice(0, 10);
+    if (generalAudiences.length) {
+      subscribeToConstraints(where("audience", "in", generalAudiences));
+      subscribeToConstraints(where("audiences", "array-contains-any", generalAudiences));
     }
 
-    if (currentUser.email) {
-      const emailQuery = query(
-        notificationsRef,
-        where("userEmail", "==", currentUser.email)
+    if (currentUser) {
+      const idCandidates = Array.from(
+        new Set([
+          userDocId,
+          currentUser?.uid || null,
+        ].filter(Boolean))
       );
-      unsubscribers.push(onSnapshot(emailQuery, handleSnapshot, handleError));
+
+      if (idCandidates.length > 0) {
+        subscribeToConstraints(
+          where("userId", "in", idCandidates.slice(0, 10))
+        );
+      }
+
+      if (currentUser.email) {
+        subscribeToConstraints(where("userEmail", "==", currentUser.email));
+      }
     }
 
-    if (!unsubscribers.length) {
+    if (!hasSubscription) {
       setNotifications([]);
       setLoading(false);
       return undefined;
@@ -253,7 +305,7 @@ export const NotificationsProvider = ({ children }) => {
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-  }, [currentUser, userDocId]);
+  }, [currentUser, userDocId, audienceValues]);
 
   const markAsRead = useCallback(
     async (notificationId) => {
@@ -295,6 +347,43 @@ export const NotificationsProvider = ({ children }) => {
       console.error("Failed to mark all notifications as read", error);
     }
   }, [notifications]);
+
+  const createTestNotification = useCallback(
+    async ({ audience = "all", tone = "info" } = {}) => {
+      const timestampLabel = new Date().toLocaleString();
+      const normalizedAudiences = Array.isArray(audience)
+        ? audience.filter(Boolean)
+        : [audience, "all"].filter(Boolean);
+
+      const notificationPayload = {
+        title: "Test notification",
+        message: `This is a sample alert generated at ${timestampLabel}.`,
+        tone,
+        createdAt: serverTimestamp(),
+        read: false,
+        audience: normalizedAudiences[0] || "all",
+        audiences: Array.from(new Set(normalizedAudiences)),
+      };
+
+      if (currentUser?.email) {
+        notificationPayload.userEmail = currentUser.email;
+      }
+      if (currentUser?.uid) {
+        notificationPayload.userId = currentUser.uid;
+      }
+      if (userDocId) {
+        notificationPayload.userDocId = userDocId;
+      }
+      if (userRole) {
+        notificationPayload.targetRole = userRole;
+      }
+
+      const notificationRef = collection(db, "notifications");
+      const docRef = await addDoc(notificationRef, notificationPayload);
+      return docRef.id;
+    },
+    [currentUser, userDocId, userRole]
+  );
 
   const bannerNotification = useMemo(() => {
     return notifications.find(
@@ -401,6 +490,7 @@ export const NotificationsProvider = ({ children }) => {
       toastNotification,
       dismissToast,
       pushToast,
+      createTestNotification,
     }),
     [
       notifications,
@@ -413,6 +503,7 @@ export const NotificationsProvider = ({ children }) => {
       toastNotification,
       dismissToast,
       pushToast,
+      createTestNotification,
     ]
   );
 

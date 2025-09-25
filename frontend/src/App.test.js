@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
+import { ThemeProvider } from './context/ThemeContext';
 
 jest.mock(
   'react-router-dom',
@@ -27,6 +28,7 @@ jest.mock('./context/NotificationsContext', () => ({
     toastNotification: null,
     dismissToast: jest.fn(),
     pushToast: jest.fn(),
+    createTestNotification: jest.fn(),
   }),
 }));
 
@@ -43,6 +45,10 @@ jest.mock('./components/TeacherMessageView', () => () => <div>Teacher Message Vi
 jest.mock('./components/StudentClassView', () => () => <div>Student Class View</div>);
 
 test('renders login page by default', () => {
-  render(<App />);
+  render(
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
+  );
   expect(screen.getByText(/login page/i)).toBeInTheDocument();
 });
