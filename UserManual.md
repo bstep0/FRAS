@@ -44,11 +44,11 @@ Our Facial Recognition Attendance System (FRAS) is a web application that we’v
 - After successfully logging in you'll be directed to the Administrator Dashboard.   
 &nbsp;
 
-<img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/LoginPage.png?raw=true" alt="Login Page" height="250" width="512">
+<img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/LoginPage.png?raw=true" alt="Login Page" height="250" width="auto">
 
-<img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentDashboard.png?raw=true" alt="Student Dashboard" height="250" width="512">
+<img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentDashboard.png?raw=true" alt="Student Dashboard" height="250" width="auto">
 
-<img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorDashboard.png?raw=true" alt="Instructor Dashboard" height="250" width="512">
+<img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorDashboard.png?raw=true" alt="Instructor Dashboard" height="250" width="auto">
 
 &nbsp;
 ## <span style="color:#00853E;"> Features and Functions</span>
@@ -76,128 +76,96 @@ Each user role—Student, Instructor, and Administrator—has its own unique wor
 
 Students will primarily use FRAS to record their attendance and view their individual attendance history.
 
-#### Key Actions
+#### Key Features for Students
 - **Login to FRAS**
    - Visit the FRAS web portal and sign in using your UNT or provided credentials.  
    - Grant permission for camera access when prompted.
-<img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/LoginPage.png?raw=true" alt="Login Page" height="250" width="512">
+<img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/LoginPage.png?raw=true" alt="Login Page" height="250" width="auto">
 
 - **Facial Recognition Check-In**
    - Select "Start Scan" on Student Dashboard
-   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentStartScan.png?raw=true" alt="Login Page" height="auto" width="auto">
+   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentStartScan.png?raw=true" alt="Start Scan" height="auto" width="auto">
+
    - Select a class from the dropdown menu.
-   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentSelectAClass.png?raw=true" alt="Login Page" height="auto" width="auto">
+   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentSelectAClass.png?raw=true" alt="Select a Class" height="auto" width="auto">
    - Look directly into the camera and hit "Capture Face".
-   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentCaptureFace.png?raw=true" alt="Login Page" height="auto" width="auto">
+
+      <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentCaptureFace.png?raw=true" alt="Capture Face" height="250" width="auto">
+
    - The system scans and verifies your identity in real time.  
    - If successful, a confirmation message appears.
 - **View Attendance History**
-   - Navigate to **My Attendance** to see attendance by course and date.  
-   - Check session timestamps, recognition status, and total absences.
+   - Navigate to the "My Classes" page and select a class from the list using the "View Class" button..
+   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentMyClassesPage.png?raw=true" alt="My Classes Page" height="250" width="auto">
 
-#### Student Dashboard Highlights
-- Simplified layout showing only enrolled courses.  
-- Quick status indicators (✅ Present / ⚠️ Not Recorded).  
-- Lightweight for mobile or low-bandwidth devices.  
-
-📸 *Placeholder: Screenshot of Student Dashboard and Check-In Screen.*
-
----
-
+   - Check class attendance records for the selected class.
+   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentClassView.png?raw=true" alt="Class View Page" height="250" width="auto">
+&nbsp;
 ### <span style="color:#00853E;">Instructor Workflow</span>
 
-Instructors oversee attendance sessions, verify recognition results, and export reports.
+Instructors oversee attendance for their classes, modify attendance records, and export reports.
 
-#### Key Actions
-1. **Login to Instructor Dashboard**
-   - Sign in with instructor credentials via the main FRAS login portal.  
-   - Verify your class list and session schedule.
-2. **Start an Attendance Session**
-   - Select a class → click **Start Session**.  
-   - The system activates recognition for enrolled students.
-3. **Monitor Attendance in Real Time**
-   - Watch as students’ faces are detected and marked present automatically.  
-   - Each student’s status updates live (green = recognized, gray = pending).
-4. **Manual Attendance Edits**
-   - Click a student name to override attendance (mark present, absent, or excused).  
-   - Useful for edge cases (camera issues or missed scans).
-5. **End the Session**
-   - Click **End Session** to finalize records.  
-   - Data automatically syncs to Firestore and appears in reports.
-6. **View & Export Attendance Reports**
-   - Navigate to **Reports → Class Summary** to review attendance data.  
-   - Export reports as **CSV or PDF** for archival or sharing.
+#### Key Features for Instructors
+- **Login to FRAS**
+   - Sign in using your instructor credentials.
+   - After login, you will be directed to the Instructor Dashboard.
+   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/LoginPage.png?raw=true" alt="Login Page" height="250" width="auto">
 
-#### Instructor Dashboard Highlights
-- Real-time recognition feed  
-- Student status list with timestamps  
-- Quick buttons for manual correction  
-- “End Session” button for closing attendance  
+- **View Individual Class Attendance**
+   - Navigate to the "My Classes Page" from the dashboard.
 
-📸 *Placeholder: Screenshot of Instructor Dashboard and Live Recognition Feed.*
+   - Select a class from the class list using the "View Class" button.
+   
+- **Manual Attendance Edits**
+   - Click a student name to override attendance.
+   - Select the date.
+   - Choose the new attendance status.
+   - Add an optional reason for edit.
 
----
+- **Export Attendance Reports**
+   - Navigate to a class view page.
+   - Scroll to bottom of the class page.
+   - Select a start date and an end date from the filter options. 
+   - Click the "Export Attendance" button.    
+&nbsp;
+### <span style="color:#00853E;">Administrator Workflows</span>
 
-### <span style="color:#00853E;">Administrator Workflow</span>
+Administrators manage users and classes within FRAS.  
 
-Administrators manage system users, roles, database records, and security configurations.
+#### Key Features for Administrators
 
-#### Key Actions
-1. **Access the Admin Dashboard**
-   - Log in with admin credentials.  
-   - Admins see system-level metrics, user roles, and application logs.
-2. **User and Role Management**
-   - Add new users (students, instructors, or other admins).  
-   - Assign or modify roles via **User Management** → **Edit Role**.
-3. **Course and Roster Management**
-   - Create or import course rosters.  
-   - Link instructors to courses and students to class lists.
-4. **Data Oversight and Maintenance**
-   - Review all attendance logs and reports across departments.  
-   - Check recognition accuracy and detect repeated failures.
-5. **Monitor System Health**
-   - View active sessions, failed recognition events, and error logs.  
-   - Confirm that Firebase and hosting services are online.
-6. **Export Global Reports**
-   - Generate institution-wide summaries for attendance trends.  
-   - Export as CSV for analytics or auditing purposes.
-7. **Security and Backup**
-   - Verify database encryption, authentication settings, and API limits.  
-   - Perform periodic data integrity checks and backups.
+- **Login to FRAS**  
+   - Sign in using your administrator credentials.  
+   - After login, you will be directed to the Admin Dashboard.
+- **Add a New User**  
+   - Navigate to User Management → Add User.  
+   - Enter the user’s name, email, and assign the correct role (Student, Instructor, or Admin).  
+   - Click Save to register the new account in Firebase Authentication and Firestore.  
 
-#### Admin Dashboard Highlights
-- Global statistics on attendance and recognition accuracy  
-- Role-based access editing tools  
-- Error log viewer for debugging  
-- Quick links to system health reports  
+- **Manage an Existing User**  
+   - Go to User Management → User List to view all registered users.  
+   - Select a user to update their profile details, change their assigned role, or add and remove classes
+   - All edits are automatically synchronized to the database.
 
-📸 *Placeholder: Screenshot of Admin Dashboard and Analytics Page.*
+- **Delete a User**  
+   - From the User List, select the user to be removed.  
+   - Click Delete and confirm when prompted.  
 
----
+- **Add a New Class**  
+   - Navigate to Class Management → Add Class.  
+   - Enter the class name, course code, and assign an instructor.   
+   - Click Create Class to finalize setup.  
+   - The class will appear immediately under both the Admin and Instructor dashboards.
 
-### <span style="color:#00853E;">Additional Functional Notes</span>
+- **Manage Existing Classes**  
+   - Open Class Management → Class List to view all existing classes.  
+   - Select a class to edit details such as course name, instructor, or enrolled students.  
+   - You may manually add or remove students or reassign instructors as needed.  
+   - Changes take effect immediately across all dashboards.
 
-- **Session Management:** Instructors can open sessions early to reduce delays at class start.  
-- **Error Handling:** All recognition errors are logged and retried automatically where possible.  
-- **Cross-Browser Compatibility:** Tested on Chrome, Edge, Firefox, and Safari.  
-- **Offline Handling:** If the connection drops, attendance data queues and syncs once the network returns.  
-- **Accessibility:** The interface uses high-contrast buttons, large icons, and ARIA labels for accessibility compliance.  
-
-📸 *Placeholder: Screenshots of Error Messages, Reports, and Analytics Graphs.*
-
----
-
-### <span style="color:#00853E;">Summary</span>
-
-| **User Role** | **Primary Responsibilities** | **Key Tools in Dashboard** |
-|----------------|------------------------------|-----------------------------|
-| **Student** | Log in, scan face, and verify attendance. | Attendance check-in, attendance history view. |
-| **Instructor** | Launch sessions, monitor recognition, adjust attendance. | Live feed, session management, report export. |
-| **Administrator** | Manage users, monitor system health, audit data. | User management, analytics, database logs. |
-
-The FRAS platform is designed so that each user can complete their role’s tasks efficiently and intuitively, minimizing manual effort while maintaining security and accuracy across the system.
-
-
+- **Deleting a Class**  
+   - From the Class List, select the class you wish to remove.  
+   - Click Delete and confirm to permanently remove the class.   
 &nbsp;
 ## <span style="color:#00853E;">Troubleshooting</span>
 
