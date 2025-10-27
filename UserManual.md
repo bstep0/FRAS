@@ -89,7 +89,6 @@ Students will primarily use FRAS to record their attendance and view their indiv
    - Select a class from the dropdown menu.
    <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentSelectAClass.png?raw=true" alt="Select a Class" height="auto" width="auto">
    - Look directly into the camera and hit "Capture Face".
-
       <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/StudentCaptureFace.png?raw=true" alt="Capture Face" height="250" width="auto">
 
    - The system scans and verifies your identity in real time.  
