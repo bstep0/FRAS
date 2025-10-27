@@ -108,19 +108,24 @@ Instructors oversee attendance for their classes, modify attendance records, and
 #### Key Features for Instructors
 - **Login to FRAS**
    - Sign in using your instructor credentials.
-   - After login, you will be directed to the Instructor Dashboard.
    <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/LoginPage.png?raw=true" alt="Login Page" height="250" width="auto">
+   - After login, you will be directed to the Instructor Dashboard.
+   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorDashboard.png?raw=true" alt="Instructor Dashboard" height="250" width="auto">
+   
 
 - **View Individual Class Attendance**
    - Navigate to the "My Classes Page" from the dashboard.
-
+   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorMyClasses.png?raw=true" alt="Instructor My Classes" height="250" width="auto">
    - Select a class from the class list using the "View Class" button.
-   
+   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorSelectClass.png?raw=true" alt="Instructor Dashboard" height="250" width="auto">
+
 - **Manual Attendance Edits**
    - Click a student name to override attendance.
    - Select the date.
    - Choose the new attendance status.
    - Add an optional reason for edit.
+
+   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorModify.png?raw=true" alt="Instructor Dashboard" height="250" width="auto">
 
 - **Export Attendance Reports**
    - Navigate to a class view page.
