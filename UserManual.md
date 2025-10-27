@@ -95,7 +95,8 @@ Before diving into the detailed fixes, try these steps first:
 | **Login error / Invalid credentials** | Typo, expired session, or account mismatch | Re-enter credentials carefully, reset your password through UNT’s portal, or contact support. |
 | **Blank dashboard / Missing classes** | Not enrolled or using wrong account | Confirm you’re logged into the correct school account; contact your instructor or administrator if the class isn’t listed. |
 | **Report export is empty** | Wrong class or date range selected | Check filters, re-select correct class, and try exporting again. |
-| **Database write failed** | Server timeout or Firestore quota | Retry after a few seconds; if persistent, notify the administrator. |
+| **Database write failed** | Server timeout or Firestore quota | Retry after a few seconds; if persistent, notify the administrator. |  
+
 &nbsp;
 ### <span style="color:#00853E;">Fixing Camera Permissions</span>
 
@@ -117,6 +118,7 @@ Before diving into the detailed fixes, try these steps first:
 | **Slow load times or lag** | Weak network / VPN interference | Connect to a stable Wi-Fi network, disable VPN, refresh the page. |
 | **Frequent disconnects** | Browser timeout / unstable internet | Move closer to your router or access point, or switch to a wired Ethernet connection. |
 | **Web app not loading** | Browser cache or outdated version | Clear browser cache, close all FRAS tabs, reopen in incognito mode. |  
+
 &nbsp;
 ### <span style="color:#00853E;">Attendance Syncing</span>
 
@@ -124,6 +126,7 @@ Before diving into the detailed fixes, try these steps first:
 |--------------|-----------|---------|
 | **Students not visible in class roster** | Roster not synced yet | Instructor: refresh the dashboard; Admin: reimport class roster. |
 | **Attendance missing after class** | Database sync delay | Wait up to 2 minutes, then refresh. Instructors can manually update attendance records. |  
+
 &nbsp;
 ### <span style="color:#00853E;">Recognition Quality Tips</span>
 
@@ -140,6 +143,7 @@ Before diving into the detailed fixes, try these steps first:
 | **Students not appearing on class view dashboard** | Wrong course selected | Re-select course. |
 | **Manual override not saving** | Network or permission issue | Ensure connection is stable and you have instructor privileges. Otherwise, contact administrator or support. |
 | **Exported report empty** | Filter or date mismatch | Adjust filters and re-export; verify attendance was recorded. |  
+
 &nbsp;
 ### <span style="color:#00853E;">Student-Specific Issues</span>
 
@@ -148,6 +152,7 @@ Before diving into the detailed fixes, try these steps first:
 | **Recognition failed** | Poor lighting or camera angle | Re-scan in better lighting or adjust position. |
 | **Wrong name displayed** | Database mismatch | Notify instructor or admin to verify your user profile. |
 | **Forgot password** | UNT login issue | Reset password via UNT account portal, then re-sign into FRAS. |  
+
 &nbsp;
 ### <span style="color:#00853E;">Administrator Diagnostics</span>
 
