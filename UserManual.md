@@ -1,9 +1,7 @@
 # <span style="color:#00853E;">Facial Recognition Attendance System (FRAS) – User Manual</span>
 
-**Team:** Group 3
-
-**Date:** October 25th, 2025
-
+**Team:** Group 3  
+**Date:** October 25th, 2025  
 **Version:** 1.0
 &nbsp;
 ## <span style="color:#00853E;"> Introduction</span>
@@ -23,8 +21,8 @@ Our Facial Recognition Attendance System (FRAS) is a web application that we’v
    - Connected to UNT's wireless network when attempting attendance recording.
 
 **Software Requirements:**
-- Web Browser: Chrome, Firefox, Edge, or Safari  
-- Operating System: Windows 10+, macOS 10.15+, or Linux    
+- Web Browser: Chrome, Firefox, Edge, or Safari
+- Operating System: Windows 10+, macOS 10.15+, or Linux  
 &nbsp;
 ## <span style="color:#00853E;"> Installation Guide</span>
 
@@ -53,7 +51,6 @@ Our Facial Recognition Attendance System (FRAS) is a web application that we’v
 <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorDashboard.png?raw=true" alt="Instructor Dashboard" height="250" width="512">
 
 &nbsp;
-
 ## <span style="color:#00853E;"> Features and Functions</span>
 
 | **Feature** | **Description** | **Accessible By** |
@@ -69,7 +66,7 @@ Our Facial Recognition Attendance System (FRAS) is a web application that we’v
 
 
 &nbsp;
-## <span style="color:#00853E;">6. Troubleshooting</span>
+## <span style="color:#00853E;"> Troubleshooting</span>
 
 | **Issue** | **Possible Cause** | **Solution** |
 |------------|--------------------|---------------|
@@ -113,12 +110,9 @@ Our Facial Recognition Attendance System (FRAS) is a web application that we’v
 **A:** You cannot upload an image yourself. If you like to upload a new image, please contact support at UNT.FRAS@gmail.com.
 
 **Q: How do I report a bug or technical issue?**   
-**A:** Please attempt to capture or screenshot the problem you are experiencing and email it to UNT.FRAS@gmail.com, along with a description of the problem. Also include any important information related to the problem such as your role, the browser you are using, and the hardware you are using.
-
+**A:** Please attempt to capture or screenshot the problem you are experiencing and email it to UNT.FRAS@gmail.com, along with a description of the problem. Also include any important information related to the problem such as your role, the browser you are using, and the hardware you are using. 
 &nbsp;
 ## <span style="color:#00853E;"> Contact Information</span>
 For help or technical support, contact:  
 
-**Group 3 – FRAS Support**  @
-
-UNT.FRAS@gmail.com 
+**Group 3 – FRAS Support  @** UNT.FRAS@gmail.com 
