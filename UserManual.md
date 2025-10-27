@@ -125,13 +125,15 @@ Instructors oversee attendance for their classes, modify attendance records, and
    - Choose the new attendance status.
    - Add an optional reason for edit.
 
-   <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorModify.png?raw=true" alt="Instructor Dashboard" height="250" width="auto">
+      <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorModify.png?raw=true" alt="Modify Attendance" height="250" width="auto">  
 
 - **Export Attendance Reports**
    - Navigate to a class view page.
    - Scroll to bottom of the class page.
    - Select a start date and an end date from the filter options. 
-   - Click the "Export Attendance" button.    
+   - Click the "Export Attendance" button.  
+
+      <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorExport.png?raw=true" alt="Export Attendance" height="auto" width="auto">
 &nbsp;
 ### <span style="color:#00853E;">Administrator Workflows</span>
 
