@@ -66,18 +66,109 @@ Our Facial Recognition Attendance System (FRAS) is a web application that we’v
 
 
 &nbsp;
-## <span style="color:#00853E;"> Troubleshooting</span>
+## <span style="color:#00853E;">Troubleshooting</span>
 
-| **Issue** | **Possible Cause** | **Solution** |
-|------------|--------------------|---------------|
-| Camera not detected | Browser permissions disabled | Enable camera permissions in browser settings |
-| Face not recognized | Poor lighting or camera angle | Adjust lighting or face camera directly |
-| Slow load times | Weak internet connection | Refresh page or change network |
-| Attendance missing | Recognition timeout | Instructor can manually mark student present |
-| Login error | Incorrect credentials | Reset password or contact admin |
+If you run into issues while using our Facial Recognition Attendance System (FRAS), use this troubleshooting guide to quickly identify and resolve common problems. Each issue includes the likely cause and a recommended solution.
+&nbsp;
+### <span style="color:#00853E;">Quick Fix Checklist</span>
 
-📸 *Placeholder: Insert screenshot of troubleshooting page here.*
+Before diving into the detailed fixes, try these steps first:
 
+1. Refresh the page using `Ctrl + F5` (Windows) or `⌘ + Shift + R` (macOS).  
+2. Check your internet connection and disable VPNs if active.  
+3. Ensure your camera permissions are granted.  
+4. Close other apps that might be using the webcam (Zoom, Teams, etc).  
+5. Improve lighting and make sure your face is clearly visible.  
+6. Log out and back in to refresh your session.  
+7. Try another browser (Chrome, Edge, Firefox, or Safari).
+&nbsp;
+### <span style="color:#00853E;">Common Issues and Solutions</span>
+
+| **Issue** | **Possible Cause** | **Recommended Solution** |
+|------------|--------------------|----------------------------|
+| **Camera not detected** | Browser permissions are blocked | In Chrome, click the "tune" in the address bar → Camera → Allow Toggle → refresh the page. |
+| **Camera already in use** | Another app or browser tab is already using your webcam | Close other tabs or programs (Zoom, Teams, etc.), then reload FRAS. |
+| **Face not recognized** | Poor lighting, camera angle, or camera view obstruction | Sit facing the light source, remove hats/masks/face coverings, and clean the camera lens. |
+| **Low recognition accuracy** | Outdated or unclear profile photo | Ask an administrator to update your reference photo in FRAS. |
+| **Page freezes or loads slowly** | Weak Wi-Fi connection or high CPU usage | Switch to a stronger network and close unused programs/tabs. |
+| **Attendance not showing up** | Recognition timeout or sync delay | Wait a few minutes, refresh the dashboard, or ask your instructor to verify your attendance records. |
+| **Login error / Invalid credentials** | Typo, expired session, or account mismatch | Re-enter credentials carefully, reset your password through UNT’s portal, or contact support. |
+| **Blank dashboard / Missing classes** | Not enrolled or using wrong account | Confirm you’re logged into the correct school account; contact your instructor or administrator if the class isn’t listed. |
+| **Report export is empty** | Wrong class or date range selected | Check filters, re-select correct class, and try exporting again. |
+| **Database write failed** | Server timeout or Firestore quota | Retry after a few seconds; if persistent, notify the administrator. |
+&nbsp;
+### <span style="color:#00853E;">Fixing Camera Permissions</span>
+
+#### Browser Settings
+- **Chrome / Edge:** Click the tune icon in the address bar → Camera → Allow Access
+- **Firefox:** Go to Settings → Privacy & Security → Permissions → Camera → allow Access   
+- **Safari (macOS):** Safari → Settings → Websites → Camera** → set FRAS to Allow
+
+#### Operating System Settings
+- **Windows 10/11:**  
+  - Settings → Privacy → Camera → Allow apps to access your camera → make sure your browser is toggled ON  
+- **macOS:**  
+  - System Settings → Privacy & Security → Camera → enable your browser  
+&nbsp;
+### <span style="color:#00853E;">Network and Performance Issues</span>
+
+| **Issue** | **Possible Cause** | **Recommended Solution** |
+|--------------|--------------------|---------------|
+| **Slow load times or lag** | Weak network / VPN interference | Connect to a stable Wi-Fi network, disable VPN, refresh the page. |
+| **Frequent disconnects** | Browser timeout / unstable internet | Move closer to your router or access point, or switch to a wired Ethernet connection. |
+| **Web app not loading** | Browser cache or outdated version | Clear browser cache, close all FRAS tabs, reopen in incognito mode. |  
+&nbsp;
+### <span style="color:#00853E;">Attendance Syncing</span>
+
+| **Issue** | **Possible Cause** | **Recommended Solution** |
+|--------------|-----------|---------|
+| **Students not visible in class roster** | Roster not synced yet | Instructor: refresh the dashboard; Admin: reimport class roster. |
+| **Attendance missing after class** | Database sync delay | Wait up to 2 minutes, then refresh. Instructors can manually update attendance records. |  
+&nbsp;
+### <span style="color:#00853E;">Recognition Quality Tips</span>
+
+- Ensure even, preferably front-facing, lighting (avoid sitting in shadows or with bright windows behind you).  
+- Keep camera height at eye level and face centered in the frame.  
+- Avoid wearing hats, sunglasses, masks, or any type of face covering during attendance check-in.  
+- Clean your webcam lens regularly for better image quality.  
+- For more consistent results, use the same device throughout the semester.  
+&nbsp;
+### <span style="color:#00853E;">Instructor-Specific Issues</span>
+
+| **Issue** | **Possible Cause** | **Recommended Solution** |
+|--------------|--------------------|---------------|
+| **Students not appearing on class view dashboard** | Wrong course selected | Re-select course. |
+| **Manual override not saving** | Network or permission issue | Ensure connection is stable and you have instructor privileges. Otherwise, contact administrator or support. |
+| **Exported report empty** | Filter or date mismatch | Adjust filters and re-export; verify attendance was recorded. |  
+&nbsp;
+### <span style="color:#00853E;">Student-Specific Issues</span>
+
+| **Issue** | **Possible Cause** | **Recommended Solution** |
+|--------------|--------------------|---------------|
+| **Recognition failed** | Poor lighting or camera angle | Re-scan in better lighting or adjust position. |
+| **Wrong name displayed** | Database mismatch | Notify instructor or admin to verify your user profile. |
+| **Forgot password** | UNT login issue | Reset password via UNT account portal, then re-sign into FRAS. |  
+&nbsp;
+### <span style="color:#00853E;">Administrator Diagnostics</span>
+
+**If multiple users report ongoing issues:**
+
+1. **Check site status:** Confirm FRAS site loads correctly on another device or browser.  
+2. **Verify database:** Open Firebase → Firestore Rules & Usage → look for recent write errors.  
+3. **Authentication:** Confirm affected users exist in Firebase Authentication and have correct roles.  
+4. **Test Firestore connectivity:** Try reading/writing a small test document.
+5. **Review server logs:** Look for network or CORS errors blocking connections.  
+6. **Check hosting uptime:** Verify Render/Firebase Hosting status pages for outages.  
+
+If critical services fail, contact **FRAS Support** (see Contact Information section).  
+&nbsp;
+### <span style="color:#00853E;">Preventive Tips</span>
+
+- Test your webcam and login before class starts.  
+- Keep browsers updated to the latest version.  
+- Restart your computer weekly to clear cached processes.   
+- Avoid browser extensions that block camera/mic access.  
+- Maintain consistent classroom lighting conditions for best accuracy.
 
 &nbsp;
 ## <span style="color:#00853E;"> FAQ</span>
