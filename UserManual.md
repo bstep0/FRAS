@@ -110,6 +110,7 @@ Instructors oversee attendance for their classes, modify attendance records, and
 - **Login to FRAS**
    - Sign in using your instructor credentials.
    <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/LoginPage.png?raw=true" alt="Login Page" height="250" width="auto">
+   
    - After login, you will be directed to the Instructor Dashboard.
    <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorDashboard.png?raw=true" alt="Instructor Dashboard" height="250" width="auto">
    
@@ -117,7 +118,7 @@ Instructors oversee attendance for their classes, modify attendance records, and
 - **View Individual Class Attendance**
    - Navigate to the "My Classes Page" from the dashboard.
    <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorMyClasses.png?raw=true" alt="Instructor My Classes" height="250" width="auto">
-   
+
    - Select a class from the class list using the "View Class" button.
    <img src="https://github.com/bstep0/FRAS/blob/main/Images%20for%20User%20Manual/InstructorSelectClass.png?raw=true" alt="Instructor Dashboard" height="250" width="auto">
 
