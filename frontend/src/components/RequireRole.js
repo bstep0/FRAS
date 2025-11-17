@@ -40,6 +40,7 @@ const RequireRole = ({ role, allowedRoles, children }) => {
   const [authUser, setAuthUser] = useState(() => auth.currentUser);
   const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
   const location = useLocation();
 
   const normalizedRoles = useMemo(() => {
@@ -55,19 +56,32 @@ const RequireRole = ({ role, allowedRoles, children }) => {
   }, [allowedRoles, role]);
 
   useEffect(() => {
+    let isMounted = true;
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!isMounted) return;
+
       setAuthUser(firebaseUser);
       setUserRole(null);
-      setLoading(true);
+      setAuthReady(true);
     });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
     let isMounted = true;
 
     const resolveRole = async () => {
+      if (!authReady) return;
+
+      if (isMounted) {
+        setLoading(true);
+      }
+
       if (!authUser?.email) {
         if (isMounted) {
           setUserRole(null);
@@ -101,7 +115,7 @@ const RequireRole = ({ role, allowedRoles, children }) => {
     return () => {
       isMounted = false;
     };
-  }, [authUser]);
+  }, [authUser, authReady]);
 
   if (loading) {
     return (
