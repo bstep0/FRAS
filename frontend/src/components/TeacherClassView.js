@@ -515,9 +515,9 @@ const TeacherClassView = () => {
                   </div>
                   <Link
                     to={`/teacher/classes/${classId}/students/${student.id}`}
-                    className="rounded bg-unt-green px-3 py-1 text-sm font-semibold text-white transition hover:bg-unt-green/90"
+                    className="rounded bg-unt-green px-3 py-1 text-md font-semibold text-white transition hover:bg-unt-green/90"
                   >
-                    View attendance
+                    View Attendance
                   </Link>
                 </li>
               ))}

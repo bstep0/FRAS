@@ -391,8 +391,7 @@ const AdminUsers = () => {
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-unt-green/90">Directory</p>
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Users</h2>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">AttendU Users</h2>
             <p className="text-sm text-slate-600 dark:text-slate-300">
               Review accounts, adjust roles, and manage class assignments.
             </p>

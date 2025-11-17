@@ -6,13 +6,6 @@ const AdminDashboard = () => {
   return (
     <AdminLayout title="Dashboard">
       <div className="grid grid-cols-1 gap-6">
-        <section className="glass-card">
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-unt-green/90">Administration</p>
-          <h2 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">Welcome back</h2>
-          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-            Choose a management area to review accounts, update access, and keep classes aligned.
-          </p>
-
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Link
               to="/admin/users"
@@ -21,10 +14,10 @@ const AdminDashboard = () => {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 transition group-hover:text-unt-green dark:text-white">
-                    User management
+                    User Management
                   </h3>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                    Add, edit, and assign roles so admins, instructors, and students have the right access.
+                  <p className="mt-6 text-md text-slate-600 dark:text-slate-300">
+                    Create users, assign roles, and manage users across the platform.
                   </p>
                 </div>
                 <span
@@ -46,19 +39,6 @@ const AdminDashboard = () => {
                   </svg>
                 </span>
               </div>
-              <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-unt-green transition group-hover:gap-3">
-                Manage users
-                <svg
-                  className="h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
-                </svg>
-              </span>
             </Link>
 
             <Link
@@ -68,9 +48,9 @@ const AdminDashboard = () => {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 transition group-hover:text-unt-green dark:text-white">
-                    Class management
+                    Class Management
                   </h3>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  <p className="mt-6 text-md text-slate-600 dark:text-slate-300">
                     Create classes, adjust schedules, and keep rosters synced with instructor assignments.
                   </p>
                 </div>
@@ -93,22 +73,8 @@ const AdminDashboard = () => {
                   </svg>
                 </span>
               </div>
-              <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-unt-green transition group-hover:gap-3">
-                Manage classes
-                <svg
-                  className="h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
-                </svg>
-              </span>
             </Link>
           </div>
-        </section>
       </div>
     </AdminLayout>
   );

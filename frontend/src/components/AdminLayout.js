@@ -126,7 +126,7 @@ const AdminLayout = ({ title, headerActions, children }) => {
                 />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-white">{displayName || "Admin"}</p>
-                  <p className="truncate text-xs text-white/70">{email || "admin@unt.edu"}</p>
+                  <p className="truncate text-xs text-white/70">{email || "admin@admin.edu"}</p>
                 </div>
               </div>
             </div>
@@ -137,7 +137,7 @@ const AdminLayout = ({ title, headerActions, children }) => {
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-b border-unt-green/10 bg-white/80 px-6 py-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-unt-green dark:text-unt-green/70">
-              Admin Portal
+              Administrator Portal
             </p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{title}</h1>
           </div>
