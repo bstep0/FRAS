@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import ThemeToggle from "./ThemeToggle";
-import { auth, db } from "../firebaseConfig";
+import { auth, authReady, db } from "../firebaseConfig";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -15,6 +15,7 @@ const LoginPage = () => {
     event.preventDefault();
 
     try {
+      await authReady;
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 

@@ -2,7 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getFirestore } from "firebase/firestore"; 
-import { getAuth } from "firebase/auth"; 
+import { browserSessionPersistence, getAuth, setPersistence } from "firebase/auth";
 import { collection } from "firebase/firestore"; 
 import { doc } from "firebase/firestore";
 import { getDocs } from "firebase/firestore";
@@ -38,4 +38,9 @@ if (typeof window !== "undefined") {
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-export { db, auth, collection, doc, getDocs };
+const authReady =
+  typeof window !== "undefined"
+    ? setPersistence(auth, browserSessionPersistence)
+    : Promise.resolve();
+
+export { auth, authReady, collection, db, doc, getDocs };
