@@ -6,9 +6,9 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 
 const ClassAttendanceChart = ({ attendanceSummary }) => {
   const presentCount = attendanceSummary?.Present ?? 0;
-  const absentCount  = attendanceSummary?.Absent  ?? 0;
-  const lateCount    = attendanceSummary?.Late    ?? 0;
-  const total = presentCount + absentCount + lateCount;
+  const absentCount = attendanceSummary?.Absent ?? 0;
+  const pendingCount = attendanceSummary?.Pending ?? 0;
+  const total = presentCount + absentCount + pendingCount;
 
 
   const [isDark, setIsDark] = useState(() =>
@@ -51,17 +51,17 @@ const ClassAttendanceChart = ({ attendanceSummary }) => {
 
   const data = useMemo(
     () => ({
-      labels: ["Present", "Absent"],
+      labels: ["Present", "Absent", "Pending"],
       datasets: [
         {
-          data: [presentCount, absentCount, lateCount],
-          backgroundColor: ["#22C55E", "#EF4444"], // green/red/
+          data: [presentCount, absentCount, pendingCount],
+          backgroundColor: ["#22C55E", "#EF4444", "#FBBF24"],
           borderWidth: 0.5,
           hoverOffset: 6,
         },
       ],
     }),
-    [presentCount, absentCount, lateCount]
+    [presentCount, absentCount, pendingCount]
   );
 
   const options = useMemo(

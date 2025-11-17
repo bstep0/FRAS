@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -77,13 +78,25 @@ const formatRecordDate = (value) => {
 
 const resolveStudentName = (studentData, fallbackName, fallbackId) => {
   if (studentData) {
-    const { displayName, fullName, name, firstName, lastName, email } = studentData;
+    const {
+      displayName,
+      fullName,
+      name,
+      firstName,
+      lastName,
+      fname,
+      lname,
+      email,
+    } = studentData;
 
     if (displayName) return displayName;
     if (fullName) return fullName;
     if (name) return name;
 
-    const combined = [firstName, lastName].filter(Boolean).join(" ").trim();
+    const combined = [firstName || fname, lastName || lname]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
     if (combined) return combined;
     if (email) return email;
   }
@@ -105,12 +118,107 @@ const TeacherClassView = () => {
   const [selectedDate, setSelectedDate] = useState("");
   const [editReason, setEditReason] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeletingId, setIsDeletingId] = useState(null);
+  const [classInfo, setClassInfo] = useState(null);
+  const [enrolledStudents, setEnrolledStudents] = useState([]);
+  const [rosterMap, setRosterMap] = useState(new Map());
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [exportFeedback, setExportFeedback] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const { pushToast } = useNotifications();
+
+  const fetchClassRoster = useCallback(async () => {
+    if (!classId) {
+      setClassInfo(null);
+      setEnrolledStudents([]);
+      setRosterMap(new Map());
+      return;
+    }
+
+    try {
+      const classSnapshot = await getDoc(doc(db, "classes", classId));
+      if (!classSnapshot.exists()) {
+        setClassInfo(null);
+        setEnrolledStudents([]);
+        setRosterMap(new Map());
+        return;
+      }
+
+      const classData = classSnapshot.data() || {};
+      setClassInfo({ id: classSnapshot.id, ...classData });
+
+      const rawRoster =
+        classData.students ||
+        classData.studentIds ||
+        classData.enrolledStudents ||
+        classData.classList ||
+        [];
+
+      const normalizedRoster = [];
+      const idsToLookup = new Set();
+
+      rawRoster.forEach((entry) => {
+        if (typeof entry === "string") {
+          normalizedRoster.push({ id: entry, name: "" });
+          idsToLookup.add(entry);
+          return;
+        }
+
+        if (entry && typeof entry === "object") {
+          const { id, studentID, studentId, name, fullName, displayName } = entry;
+          const candidateId = id || studentID || studentId;
+          if (candidateId) {
+            idsToLookup.add(candidateId);
+            normalizedRoster.push({
+              id: candidateId,
+              name: name || fullName || displayName || "",
+            });
+          }
+        }
+      });
+
+      const rosterMapCopy = new Map();
+
+      await Promise.all(
+        Array.from(idsToLookup).map(async (studentId) => {
+          try {
+            const studentSnap = await getDoc(doc(db, "users", studentId));
+            if (studentSnap.exists()) {
+              rosterMapCopy.set(studentId, { id: studentSnap.id, ...studentSnap.data() });
+            }
+          } catch (error) {
+            console.error(`Unable to load roster student ${studentId}`, error);
+          }
+        })
+      );
+
+      const resolvedRoster = normalizedRoster.map((student) => {
+        const studentData = rosterMapCopy.get(student.id);
+        return {
+          id: student.id,
+          name: resolveStudentName(studentData, student.name, student.id),
+          data: studentData,
+        };
+      });
+
+      resolvedRoster.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
+      setEnrolledStudents(resolvedRoster);
+      setRosterMap(rosterMapCopy);
+    } catch (error) {
+      console.error("Failed to load class roster", error);
+      setClassInfo(null);
+      setEnrolledStudents([]);
+      setRosterMap(new Map());
+      pushToast({
+        tone: "error",
+        title: "Roster unavailable",
+        message: "We couldn't load the class roster. Please try again shortly.",
+      });
+    }
+  }, [classId, pushToast, rosterMap]);
 
   const fetchAttendanceRecords = useCallback(async () => {
     if (!classId) {
@@ -139,9 +247,16 @@ const TeacherClassView = () => {
       ];
 
       const studentMap = new Map();
+      studentIds.forEach((studentId) => {
+        if (rosterMap.has(studentId)) {
+          studentMap.set(studentId, rosterMap.get(studentId));
+        }
+      });
+
+      const idsToFetch = studentIds.filter((studentId) => !studentMap.has(studentId));
 
       await Promise.all(
-        studentIds.map(async (studentId) => {
+        idsToFetch.map(async (studentId) => {
           try {
             const studentRef = doc(db, "users", studentId);
             const studentSnapshot = await getDoc(studentRef);
@@ -161,7 +276,7 @@ const TeacherClassView = () => {
       );
 
       const enrichedRecords = rawRecords.map((record) => {
-        const studentData = studentMap.get(record.studentID);
+        const studentData = studentMap.get(record.studentID) || rosterMap.get(record.studentID);
         const studentName = resolveStudentName(
           studentData,
           record.studentName || record.studentFullName,
@@ -201,6 +316,10 @@ const TeacherClassView = () => {
   }, [classId, pushToast]);
 
   useEffect(() => {
+    fetchClassRoster();
+  }, [fetchClassRoster]);
+
+  useEffect(() => {
     fetchAttendanceRecords();
   }, [fetchAttendanceRecords]);
 
@@ -232,7 +351,7 @@ const TeacherClassView = () => {
   const dateOptions = useMemo(() => generateDateOptions(), [generateDateOptions]);
 
   const attendanceSummary = useMemo(() => {
-    const summary = { Present: 0, Absent: 0, Late: 0 };
+    const summary = { Present: 0, Absent: 0, Pending: 0 };
 
     if (!Array.isArray(attendanceRecords) || attendanceRecords.length === 0) {
       return summary;
@@ -244,28 +363,17 @@ const TeacherClassView = () => {
 
       if (!status) return;
 
-      if (status === "present" || status === "present (remote)") {
-        summary.Present += 1;
-        return;
-      }
-
-      if (status === "late" || status === "tardy") {
-        summary.Late += 1;
-        return;
-      }
-
-      if (status === "absent" || status === "excused" || status === "unexcused") {
-        summary.Absent += 1;
+      if (status.includes("pending")) {
+        summary.Pending += 1;
         return;
       }
 
       if (status.includes("present")) {
         summary.Present += 1;
-      } else if (status.includes("late") || status.includes("tardy")) {
-        summary.Late += 1;
-      } else {
-        summary.Absent += 1;
+        return;
       }
+
+      summary.Absent += 1;
     });
 
     return summary;
@@ -274,7 +382,12 @@ const TeacherClassView = () => {
   const openModal = (record) => {
     if (!record) return;
 
-    const normalizedStatus = record.status === "Present" ? "Present" : "Absent";
+    const normalizedStatus =
+      record.status === "Present"
+        ? "Present"
+        : typeof record.status === "string" && record.status.toLowerCase().includes("pending")
+          ? "Pending"
+          : "Absent";
 
     const recordDate = record.dateValue || coerceToDate(record.date);
     const selectedDateValue = recordDate ? recordDate.toISOString() : "";
@@ -297,7 +410,12 @@ const TeacherClassView = () => {
   const handleSave = async () => {
     if (!selectedRecord) return;
 
-    const normalizedStatus = attendanceStatus === "Present" ? "Present" : "Absent";
+    const normalizedStatus =
+      attendanceStatus === "Present"
+        ? "Present"
+        : attendanceStatus === "Pending"
+          ? "Pending"
+          : "Absent";
 
     if (!auth.currentUser) {
       pushToast({
@@ -349,17 +467,54 @@ const TeacherClassView = () => {
     }
   };
 
+  const confirmDeleteRecord = async (record) => {
+    if (!record?.id) return;
+
+    const confirmed = window.confirm(
+      `Delete the attendance record for ${record.studentName || "this student"}?`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeletingId(record.id);
+
+    try {
+      await deleteDoc(doc(db, "attendance", record.id));
+
+      pushToast({
+        tone: "success",
+        title: "Attendance removed",
+        message: "The attendance record has been deleted.",
+      });
+
+      await fetchAttendanceRecords();
+    } catch (error) {
+      console.error("Failed to delete attendance record", error);
+      pushToast({
+        tone: "error",
+        title: "Delete failed",
+        message: "We couldn't delete this attendance record. Please try again.",
+      });
+    } finally {
+      setIsDeletingId(null);
+    }
+  };
+
   const statusBadgeClasses = (status) => {
     const normalizedStatus =
-      status === "Present" ? "Present" : status === "Absent" ? "Absent" : "Other";
+      status === "Present"
+        ? "Present"
+        : typeof status === "string" && status.toLowerCase().includes("pending")
+          ? "Pending"
+          : "Absent";
 
     if (normalizedStatus === "Present") {
       return "rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300";
     }
-    if (normalizedStatus === "Absent") {
-      return "rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300";
+    if (normalizedStatus === "Pending") {
+      return "rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
     }
-    return "rounded-full bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 dark:bg-slate-700 dark:text-slate-200";
+    return "rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300";
   };
 
   const handleExportAttendance = async () => {
@@ -452,8 +607,14 @@ const TeacherClassView = () => {
     }
   };
 
-  const displayStatus = (status) =>
-    status === "Present" || status === "Absent" ? status : status || "Unknown";
+  const displayStatus = (status) => {
+    if (!status) return "Unknown";
+    const normalized = typeof status === "string" ? status.trim().toLowerCase() : "";
+    if (!normalized) return "Unknown";
+    if (normalized.includes("pending")) return "Pending";
+    if (normalized.includes("present")) return "Present";
+    return "Absent";
+  };
 
   return (
     <TeacherLayout title={classId ? `${classId} Overview` : "Class Overview"}>
@@ -481,28 +642,63 @@ const TeacherClassView = () => {
 
         {/* Student list */}
         <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
-          <h2 className="mb-4 text-2xl font-semibold">Student List</h2>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="mb-1 text-2xl font-semibold">Student List</h2>
+              <p className="text-sm text-gray-600 dark:text-slate-300">
+                Select a student to open their attendance dashboard and create records.
+              </p>
+            </div>
+            {classInfo?.name ? (
+              <span className="rounded-full bg-unt-green/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-unt-green dark:bg-unt-green/20">
+                {classInfo.name}
+              </span>
+            ) : null}
+          </div>
 
-          {/* Search (non-functional placeholder for now) */}
-          <input
-            type="text"
-            placeholder="Search student name"
-            className="mb-4 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
-            aria-label="Search student"
-          />
+          {isLoading ? (
+            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">Loading roster…</p>
+          ) : enrolledStudents.length === 0 ? (
+            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">
+              No students are enrolled in this class yet.
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-gray-200 dark:divide-slate-700">
+              {enrolledStudents.map((student) => (
+                <li key={student.id} className="flex items-center justify-between gap-3 py-3">
+                  <div>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-slate-100">{student.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">ID: {student.id}</p>
+                  </div>
+                  <Link
+                    to={`/teacher/classes/${classId}/students/${student.id}`}
+                    className="rounded bg-unt-green px-3 py-1 text-sm font-semibold text-white transition hover:bg-unt-green/90"
+                  >
+                    View attendance
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Attendance records */}
+        <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
+          <h2 className="mb-2 text-2xl font-semibold">Attendance Records</h2>
+          <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">
+            Review or adjust existing attendance entries for this class.
+          </p>
 
           {isLoading ? (
             <p className="text-sm text-gray-500 dark:text-slate-400">Loading attendance records…</p>
           ) : attendanceRecords.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-slate-400">
-              No attendance records found for this class yet.
-            </p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">No attendance records found for this class yet.</p>
           ) : (
             <ul className="space-y-4">
               {attendanceRecords.map((record) => (
                 <li
                   key={record.id}
-                  className="grid grid-cols-[2fr,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
+                  className="grid grid-cols-[2fr,auto,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
                 >
                   <div>
                     <span className="text-lg font-semibold">{record.studentName}</span>
@@ -510,15 +706,23 @@ const TeacherClassView = () => {
                       <p className="text-sm text-gray-500 dark:text-slate-400">{record.formattedDate}</p>
                     ) : null}
                   </div>
-                  <span className={statusBadgeClasses(record.status)}>
-                    {displayStatus(record.status)}
-                  </span>
+                  <span className={statusBadgeClasses(record.status)}>{displayStatus(record.status)}</span>
                   <button
                     type="button"
                     onClick={() => openModal(record)}
                     className="rounded bg-unt-green px-3 py-1 text-white transition hover:bg-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
                   >
                     Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => confirmDeleteRecord(record)}
+                    disabled={isDeletingId === record.id}
+                    className={`rounded bg-red-600 px-3 py-1 text-white transition hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 ${
+                      isDeletingId === record.id ? "cursor-not-allowed opacity-70" : ""
+                    }`}
+                  >
+                    {isDeletingId === record.id ? "Deleting…" : "Delete"}
                   </button>
                 </li>
               ))}
@@ -594,7 +798,6 @@ const TeacherClassView = () => {
         </section>
       </div>
 
-      {/* Modal */}
       {isModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900">
@@ -629,6 +832,7 @@ const TeacherClassView = () => {
               >
                 <option value="Present">Present</option>
                 <option value="Absent">Absent</option>
+                <option value="Pending">Pending</option>
               </select>
             </div>
 
