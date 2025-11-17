@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -76,18 +77,25 @@ const formatRecordDate = (value) => {
   return parsed ? formatDateLabel(parsed) : "";
 };
 
+const formatNameFromEmail = (email) => {
+  if (typeof email !== "string") return "";
+
+  const [localPart] = email.split("@");
+  if (!localPart) return "";
+
+  return localPart
+    .split(/[._]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+    .trim();
+};
+
 const resolveStudentName = (studentData, fallbackName, fallbackId) => {
-  if (studentData) {
-    const {
-      displayName,
-      fullName,
-      name,
-      firstName,
-      lastName,
-      fname,
-      lname,
-      email,
-    } = studentData;
+  const preferredName = (() => {
+    if (!studentData) return null;
+
+    const { displayName, fullName, name, firstName, lastName, email } = studentData;
 
     if (displayName) return displayName;
     if (fullName) return fullName;
@@ -98,10 +106,19 @@ const resolveStudentName = (studentData, fallbackName, fallbackId) => {
       .join(" ")
       .trim();
     if (combined) return combined;
-    if (email) return email;
-  }
 
-  if (fallbackName) return fallbackName;
+    const emailName = formatNameFromEmail(email);
+    if (emailName) return emailName;
+
+    return null;
+  })();
+
+  if (preferredName) return preferredName;
+
+  if (fallbackName) {
+    const formattedFallback = formatNameFromEmail(fallbackName) || fallbackName;
+    if (formattedFallback.trim()) return formattedFallback;
+  }
   if (fallbackId) return fallbackId;
 
   return "Unknown Student";
@@ -118,15 +135,23 @@ const TeacherClassView = () => {
   const [selectedDate, setSelectedDate] = useState("");
   const [editReason, setEditReason] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState(null);
-  const [classInfo, setClassInfo] = useState(null);
-  const [enrolledStudents, setEnrolledStudents] = useState([]);
-  const [rosterMap, setRosterMap] = useState(new Map());
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentId, setNewStudentId] = useState("");
+  const [newAttendanceStatus, setNewAttendanceStatus] = useState("Present");
+  const [newAttendanceDate, setNewAttendanceDate] = useState(() => {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    return today.toISOString().split("T")[0];
+  });
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [exportFeedback, setExportFeedback] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const { pushToast } = useNotifications();
 
   const fetchClassRoster = useCallback(async () => {
@@ -261,9 +286,13 @@ const TeacherClassView = () => {
             const studentRef = doc(db, "users", studentId);
             const studentSnapshot = await getDoc(studentRef);
             if (studentSnapshot.exists()) {
+              const studentData = studentSnapshot.data();
+              const studentName = resolveStudentName(studentData, null, studentSnapshot.id);
+
               studentMap.set(studentId, {
                 id: studentSnapshot.id,
-                ...studentSnapshot.data(),
+                ...studentData,
+                name: studentName,
               });
             } else {
               studentMap.set(studentId, null);
@@ -283,11 +312,19 @@ const TeacherClassView = () => {
           record.studentID
         );
 
+        const studentWithName = studentData
+          ? studentData.name
+            ? studentData
+            : { ...studentData, name: studentName }
+          : record.studentID
+            ? { id: record.studentID, name: studentName }
+            : null;
+
         const dateValue = coerceToDate(record.date);
 
         return {
           ...record,
-          student: studentData,
+          student: studentWithName,
           studentName,
           dateValue,
           formattedDate: dateValue ? formatDateLabel(dateValue) : "",
@@ -385,8 +422,8 @@ const TeacherClassView = () => {
     const normalizedStatus =
       record.status === "Present"
         ? "Present"
-        : typeof record.status === "string" && record.status.toLowerCase().includes("pending")
-          ? "Pending"
+        : record.status === "Late" || record.status === "Tardy"
+          ? "Late"
           : "Absent";
 
     const recordDate = record.dateValue || coerceToDate(record.date);
@@ -407,14 +444,24 @@ const TeacherClassView = () => {
     setEditReason("");
   };
 
+  const closeCreateModal = () => {
+    setIsCreateModalOpen(false);
+    setNewStudentName("");
+    setNewStudentId("");
+    setNewAttendanceStatus("Present");
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    setNewAttendanceDate(today.toISOString().split("T")[0]);
+  };
+
   const handleSave = async () => {
     if (!selectedRecord) return;
 
     const normalizedStatus =
       attendanceStatus === "Present"
         ? "Present"
-        : attendanceStatus === "Pending"
-          ? "Pending"
+        : attendanceStatus === "Late"
+          ? "Late"
           : "Absent";
 
     if (!auth.currentUser) {
@@ -467,6 +514,84 @@ const TeacherClassView = () => {
     }
   };
 
+  const handleCreateAttendance = async () => {
+    const trimmedName = newStudentName.trim();
+    const trimmedId = newStudentId.trim();
+
+    if (!trimmedName && !trimmedId) {
+      pushToast({
+        tone: "error",
+        title: "Missing student info",
+        message: "Enter a student name or ID to create an attendance record.",
+      });
+      return;
+    }
+
+    if (!auth.currentUser) {
+      pushToast({
+        tone: "error",
+        title: "Add unavailable",
+        message: "You must be signed in to create attendance records.",
+      });
+      return;
+    }
+
+    if (!classId) {
+      pushToast({
+        tone: "error",
+        title: "Class unavailable",
+        message: "A class must be selected before creating attendance records.",
+      });
+      return;
+    }
+
+    const parsedDate = newAttendanceDate
+      ? new Date(`${newAttendanceDate}T12:00:00`)
+      : new Date();
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      pushToast({
+        tone: "error",
+        title: "Invalid date",
+        message: "Provide a valid attendance date before saving.",
+      });
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      await addDoc(collection(db, "attendance"), {
+        classID: classId,
+        studentID: trimmedId || null,
+        studentName: trimmedName || trimmedId || "Unknown Student",
+        studentFullName: trimmedName || undefined,
+        status: newAttendanceStatus,
+        date: Timestamp.fromDate(parsedDate),
+        createdBy: auth.currentUser.uid,
+        createdAt: serverTimestamp(),
+      });
+
+      pushToast({
+        tone: "success",
+        title: "Attendance added",
+        message: "A new attendance record was added to this class.",
+      });
+
+      closeCreateModal();
+      await fetchAttendanceRecords();
+    } catch (error) {
+      console.error("Failed to add attendance record", error);
+      pushToast({
+        tone: "error",
+        title: "Add failed",
+        message: "We couldn't create the attendance record. Please try again.",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const confirmDeleteRecord = async (record) => {
     if (!record?.id) return;
 
@@ -504,9 +629,11 @@ const TeacherClassView = () => {
     const normalizedStatus =
       status === "Present"
         ? "Present"
-        : typeof status === "string" && status.toLowerCase().includes("pending")
-          ? "Pending"
-          : "Absent";
+        : status === "Absent"
+          ? "Absent"
+          : status === "Late" || status === "Tardy"
+            ? "Late"
+            : "Other";
 
     if (normalizedStatus === "Present") {
       return "rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300";
@@ -514,7 +641,10 @@ const TeacherClassView = () => {
     if (normalizedStatus === "Pending") {
       return "rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
     }
-    return "rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300";
+    if (normalizedStatus === "Late") {
+      return "rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
+    }
+    return "rounded-full bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 dark:bg-slate-700 dark:text-slate-200";
   };
 
   const handleExportAttendance = async () => {
@@ -616,6 +746,16 @@ const TeacherClassView = () => {
     return "Absent";
   };
 
+  const filteredRecords = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    if (!term) return attendanceRecords;
+
+    return attendanceRecords.filter((record) =>
+      (record.studentName || "").toLowerCase().includes(term)
+    );
+  }, [attendanceRecords, searchTerm]);
+
   return (
     <TeacherLayout title={classId ? `${classId} Overview` : "Class Overview"}>
       <div className="space-y-6 text-gray-900 dark:text-slate-100">
@@ -627,6 +767,13 @@ const TeacherClassView = () => {
           >
             ← Back to classes
           </Link>
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="rounded bg-unt-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-unt-green/90 focus:outline-none focus:ring-2 focus:ring-unt-green focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+          >
+            Add Attendance
+          </button>
         </div>
 
         {/* Attendance snapshot */}
@@ -656,46 +803,31 @@ const TeacherClassView = () => {
             ) : null}
           </div>
 
-          {isLoading ? (
-            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">Loading roster…</p>
-          ) : enrolledStudents.length === 0 ? (
-            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">
-              No students are enrolled in this class yet.
-            </p>
-          ) : (
-            <ul className="mt-4 divide-y divide-gray-200 dark:divide-slate-700">
-              {enrolledStudents.map((student) => (
-                <li key={student.id} className="flex items-center justify-between gap-3 py-3">
-                  <div>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-slate-100">{student.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">ID: {student.id}</p>
-                  </div>
-                  <Link
-                    to={`/teacher/classes/${classId}/students/${student.id}`}
-                    className="rounded bg-unt-green px-3 py-1 text-sm font-semibold text-white transition hover:bg-unt-green/90"
-                  >
-                    View attendance
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Attendance records */}
-        <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
-          <h2 className="mb-2 text-2xl font-semibold">Attendance Records</h2>
-          <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">
-            Review or adjust existing attendance entries for this class.
-          </p>
+          <label className="block">
+            <span className="sr-only">Search student</span>
+            <input
+              type="text"
+              placeholder="Search student name"
+              className="mb-4 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
+              aria-label="Search student"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
 
           {isLoading ? (
             <p className="text-sm text-gray-500 dark:text-slate-400">Loading attendance records…</p>
           ) : attendanceRecords.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-slate-400">No attendance records found for this class yet.</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              No attendance records found for this class yet.
+            </p>
+          ) : filteredRecords.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              No students match your search.
+            </p>
           ) : (
             <ul className="space-y-4">
-              {attendanceRecords.map((record) => (
+              {filteredRecords.map((record) => (
                 <li
                   key={record.id}
                   className="grid grid-cols-[2fr,auto,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
@@ -798,6 +930,91 @@ const TeacherClassView = () => {
         </section>
       </div>
 
+      {/* Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Add Attendance</h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
+              Create a new attendance record for this class.
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Student Name</label>
+                <input
+                  type="text"
+                  value={newStudentName}
+                  onChange={(event) => setNewStudentName(event.target.value)}
+                  placeholder="Alex Johnson"
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                  Provide the student's full name.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Student ID (optional)</label>
+                <input
+                  type="text"
+                  value={newStudentId}
+                  onChange={(event) => setNewStudentId(event.target.value)}
+                  placeholder="123456"
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Attendance Date</label>
+                <input
+                  type="date"
+                  value={newAttendanceDate}
+                  onChange={(event) => setNewAttendanceDate(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Status</label>
+                <select
+                  value={newAttendanceStatus}
+                  onChange={(event) => setNewAttendanceStatus(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="Present">Present</option>
+                  <option value="Absent">Absent</option>
+                  <option value="Late">Late</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeCreateModal}
+                className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                disabled={isCreating}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateAttendance}
+                disabled={isCreating}
+                className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
+                  isCreating
+                    ? "cursor-not-allowed bg-unt-green dark:bg-unt-green"
+                    : "bg-unt-green hover:border-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
+                }`}
+              >
+                {isCreating ? "Saving…" : "Add attendance"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900">
@@ -832,7 +1049,7 @@ const TeacherClassView = () => {
               >
                 <option value="Present">Present</option>
                 <option value="Absent">Absent</option>
-                <option value="Pending">Pending</option>
+                <option value="Late">Late</option>
               </select>
             </div>
 

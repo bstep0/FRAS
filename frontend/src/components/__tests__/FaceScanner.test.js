@@ -7,6 +7,7 @@ jest.mock(
   'react-router-dom',
   () => ({
     useNavigate: () => jest.fn(),
+    Link: ({ children, ...props }) => <a {...props}>{children}</a>,
   }),
   { virtual: true }
 );
@@ -25,6 +26,7 @@ describe('FaceScanner', () => {
     jest.useFakeTimers();
     global.fetch = jest.fn();
     stopTrack = jest.fn();
+    sessionStorage.clear();
     navigator.mediaDevices.getUserMedia.mockResolvedValue({
       getTracks: () => [{ stop: stopTrack }],
     });
@@ -61,6 +63,25 @@ describe('FaceScanner', () => {
     return video;
   };
 
+  it('requires privacy consent before enabling capture', async () => {
+    render(<FaceScanner selectedClass="class-1" studentId="student-1" />);
+    prepareVideoElement();
+
+    const captureButton = screen.getByRole('button', { name: /capture face/i });
+
+    expect(captureButton).toBeDisabled();
+    expect(
+      screen.getByText(/privacy policy to enable scanning/i)
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /privacy policy/i }));
+
+    expect(captureButton).toBeEnabled();
+    expect(
+      screen.queryByText(/privacy policy to enable scanning/i)
+    ).not.toBeInTheDocument();
+  });
+
   it('handles pending responses and finalizes attendance', async () => {
     global.fetch
       .mockResolvedValueOnce({
@@ -76,6 +97,9 @@ describe('FaceScanner', () => {
     prepareVideoElement();
 
     await act(async () => {
+      await userEvent.click(
+        screen.getByRole('checkbox', { name: /privacy policy/i })
+      );
       await userEvent.click(screen.getByRole('button', { name: /capture face/i }));
     });
 
@@ -126,6 +150,9 @@ describe('FaceScanner', () => {
     prepareVideoElement();
 
     await act(async () => {
+      await userEvent.click(
+        screen.getByRole('checkbox', { name: /privacy policy/i })
+      );
       await userEvent.click(screen.getByRole('button', { name: /capture face/i }));
     });
 

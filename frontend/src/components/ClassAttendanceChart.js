@@ -5,13 +5,20 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const ClassAttendanceChart = ({ attendanceSummary }) => {
-  const presentCount = attendanceSummary?.Present ?? 0;
-  const absentCount = attendanceSummary?.Absent ?? 0;
-  const pendingCount = attendanceSummary?.Pending ?? 0;
-  const total = presentCount + absentCount + pendingCount;
+  const statusEntries = useMemo(
+    () =>
+      [
+        { label: "Present", value: attendanceSummary?.Present ?? 0, color: "#22C55E" },
+        { label: "Absent", value: attendanceSummary?.Absent ?? 0, color: "#EF4444" },
+        { label: "Late", value: attendanceSummary?.Late ?? 0, color: "#F59E0B" },
+      ].filter(({ value }) => value > 0),
+    [attendanceSummary]
+  );
 
-  const supportsDOM = typeof document !== "undefined";
-  const supportsObserver = supportsDOM && typeof MutationObserver !== "undefined";
+  const total = useMemo(
+    () => statusEntries.reduce((sum, { value }) => sum + value, 0),
+    [statusEntries]
+  );
 
   const [isDark, setIsDark] = useState(
     () => supportsDOM && document.documentElement.classList.contains("dark")
@@ -53,17 +60,17 @@ const ClassAttendanceChart = ({ attendanceSummary }) => {
 
   const data = useMemo(
     () => ({
-      labels: ["Present", "Absent", "Pending"],
+      labels: statusEntries.map(({ label }) => label),
       datasets: [
         {
-          data: [presentCount, absentCount, pendingCount],
-          backgroundColor: ["#22C55E", "#EF4444", "#FBBF24"],
+          data: statusEntries.map(({ value }) => value),
+          backgroundColor: statusEntries.map(({ color }) => color),
           borderWidth: 0.5,
           hoverOffset: 6,
         },
       ],
     }),
-    [presentCount, absentCount, pendingCount]
+    [statusEntries]
   );
 
   const options = useMemo(

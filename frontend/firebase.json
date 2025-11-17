@@ -48,6 +48,12 @@
   "hosting": {
     "public": "build",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
     "headers": [
       {
         "source": "**/*.@(html|js|css|json|png|jpg|jpeg|gif|svg|ico|woff2|woff|ttf|otf)",

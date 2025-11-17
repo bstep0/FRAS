@@ -108,6 +108,7 @@ const AttendanceTracking = () => {
               >
                 <option value="Present">Present</option>
                 <option value="Absent">Absent</option>
+                <option value="Late">Late</option>
               </select>
             </div>
             <div className="md:col-span-4 flex justify-end">
@@ -138,7 +139,7 @@ const AttendanceTracking = () => {
                     className={`border border-gray-300 p-2 ${
                       entry.status === "Present"
                         ? "text-green-600"
-                        : entry.status === "Pending"
+                        : entry.status === "Late"
                           ? "text-yellow-600"
                           : "text-red-600"
                     }`}
