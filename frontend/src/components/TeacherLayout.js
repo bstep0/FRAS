@@ -88,13 +88,13 @@ const TeacherLayout = ({ title, headerActions, children }) => {
         <div className="absolute inset-0 bg-unt-gradient opacity-95" aria-hidden />
         <div className="relative flex h-full flex-col p-8">
           <div className="flex items-center gap-4">
-            <div>
-                <img
-                  src="/FRASLogo.png"
-                  alt="FRAS Logo"
-                  className="h-24 w-60 object-cover border-2 border-white shadow-md"
-                />
-            </div>
+            <Link to="/teacher" className="block">
+              <img
+                src="/FRASLogo.png"
+                alt="FRAS Logo"
+                className="h-24 w-60 object-cover border-2 border-white shadow-md"
+              />
+            </Link>
           </div>
           <nav className="mt-10 space-y-2">
             {navigationItems.map((item) => {

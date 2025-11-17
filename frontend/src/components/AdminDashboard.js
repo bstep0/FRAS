@@ -8,7 +8,9 @@ const AdminDashboard = () => {
   return (
     <div className="flex min-h-screen">
       <aside className="w-64 bg-gray-800 text-white p-6">
-      <img src="/logo.png" alt="Face Recognition Attendance" className="w-24 mx-auto mb-6" />
+        <Link to="/admin" className="block">
+          <img src="/logo.png" alt="Face Recognition Attendance" className="w-24 mx-auto mb-6" />
+        </Link>
         <h2 className="text-2xl font-bold mb-6">Attendance System</h2>
         <nav>
           <ul>
