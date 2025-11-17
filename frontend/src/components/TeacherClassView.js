@@ -5,7 +5,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -105,6 +107,17 @@ const TeacherClassView = () => {
   const [selectedDate, setSelectedDate] = useState("");
   const [editReason, setEditReason] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isDeletingId, setIsDeletingId] = useState(null);
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentId, setNewStudentId] = useState("");
+  const [newAttendanceStatus, setNewAttendanceStatus] = useState("Present");
+  const [newAttendanceDate, setNewAttendanceDate] = useState(() => {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    return today.toISOString().split("T")[0];
+  });
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isExporting, setIsExporting] = useState(false);
@@ -274,7 +287,12 @@ const TeacherClassView = () => {
   const openModal = (record) => {
     if (!record) return;
 
-    const normalizedStatus = record.status === "Present" ? "Present" : "Absent";
+    const normalizedStatus =
+      record.status === "Present"
+        ? "Present"
+        : record.status === "Late" || record.status === "Tardy"
+          ? "Late"
+          : "Absent";
 
     const recordDate = record.dateValue || coerceToDate(record.date);
     const selectedDateValue = recordDate ? recordDate.toISOString() : "";
@@ -294,10 +312,25 @@ const TeacherClassView = () => {
     setEditReason("");
   };
 
+  const closeCreateModal = () => {
+    setIsCreateModalOpen(false);
+    setNewStudentName("");
+    setNewStudentId("");
+    setNewAttendanceStatus("Present");
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    setNewAttendanceDate(today.toISOString().split("T")[0]);
+  };
+
   const handleSave = async () => {
     if (!selectedRecord) return;
 
-    const normalizedStatus = attendanceStatus === "Present" ? "Present" : "Absent";
+    const normalizedStatus =
+      attendanceStatus === "Present"
+        ? "Present"
+        : attendanceStatus === "Late"
+          ? "Late"
+          : "Absent";
 
     if (!auth.currentUser) {
       pushToast({
@@ -349,15 +382,135 @@ const TeacherClassView = () => {
     }
   };
 
+  const handleCreateAttendance = async () => {
+    const trimmedName = newStudentName.trim();
+    const trimmedId = newStudentId.trim();
+
+    if (!trimmedName && !trimmedId) {
+      pushToast({
+        tone: "error",
+        title: "Missing student info",
+        message: "Enter a student name or ID to create an attendance record.",
+      });
+      return;
+    }
+
+    if (!auth.currentUser) {
+      pushToast({
+        tone: "error",
+        title: "Add unavailable",
+        message: "You must be signed in to create attendance records.",
+      });
+      return;
+    }
+
+    if (!classId) {
+      pushToast({
+        tone: "error",
+        title: "Class unavailable",
+        message: "A class must be selected before creating attendance records.",
+      });
+      return;
+    }
+
+    const parsedDate = newAttendanceDate
+      ? new Date(`${newAttendanceDate}T12:00:00`)
+      : new Date();
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      pushToast({
+        tone: "error",
+        title: "Invalid date",
+        message: "Provide a valid attendance date before saving.",
+      });
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      await addDoc(collection(db, "attendance"), {
+        classID: classId,
+        studentID: trimmedId || null,
+        studentName: trimmedName || trimmedId || "Unknown Student",
+        studentFullName: trimmedName || undefined,
+        status: newAttendanceStatus,
+        date: Timestamp.fromDate(parsedDate),
+        createdBy: auth.currentUser.uid,
+        createdAt: serverTimestamp(),
+      });
+
+      pushToast({
+        tone: "success",
+        title: "Attendance added",
+        message: "A new attendance record was added to this class.",
+      });
+
+      closeCreateModal();
+      await fetchAttendanceRecords();
+    } catch (error) {
+      console.error("Failed to add attendance record", error);
+      pushToast({
+        tone: "error",
+        title: "Add failed",
+        message: "We couldn't create the attendance record. Please try again.",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const confirmDeleteRecord = async (record) => {
+    if (!record?.id) return;
+
+    const confirmed = window.confirm(
+      `Delete the attendance record for ${record.studentName || "this student"}?`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeletingId(record.id);
+
+    try {
+      await deleteDoc(doc(db, "attendance", record.id));
+
+      pushToast({
+        tone: "success",
+        title: "Attendance removed",
+        message: "The attendance record has been deleted.",
+      });
+
+      await fetchAttendanceRecords();
+    } catch (error) {
+      console.error("Failed to delete attendance record", error);
+      pushToast({
+        tone: "error",
+        title: "Delete failed",
+        message: "We couldn't delete this attendance record. Please try again.",
+      });
+    } finally {
+      setIsDeletingId(null);
+    }
+  };
+
   const statusBadgeClasses = (status) => {
     const normalizedStatus =
-      status === "Present" ? "Present" : status === "Absent" ? "Absent" : "Other";
+      status === "Present"
+        ? "Present"
+        : status === "Absent"
+          ? "Absent"
+          : status === "Late" || status === "Tardy"
+            ? "Late"
+            : "Other";
 
     if (normalizedStatus === "Present") {
       return "rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300";
     }
     if (normalizedStatus === "Absent") {
       return "rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300";
+    }
+    if (normalizedStatus === "Late") {
+      return "rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
     }
     return "rounded-full bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 dark:bg-slate-700 dark:text-slate-200";
   };
@@ -466,6 +619,13 @@ const TeacherClassView = () => {
           >
             ← Back to classes
           </Link>
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="rounded bg-unt-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-unt-green/90 focus:outline-none focus:ring-2 focus:ring-unt-green focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+          >
+            Add Attendance
+          </button>
         </div>
 
         {/* Attendance snapshot */}
@@ -502,7 +662,7 @@ const TeacherClassView = () => {
               {attendanceRecords.map((record) => (
                 <li
                   key={record.id}
-                  className="grid grid-cols-[2fr,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
+                  className="grid grid-cols-[2fr,auto,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
                 >
                   <div>
                     <span className="text-lg font-semibold">{record.studentName}</span>
@@ -519,6 +679,16 @@ const TeacherClassView = () => {
                     className="rounded bg-unt-green px-3 py-1 text-white transition hover:bg-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
                   >
                     Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => confirmDeleteRecord(record)}
+                    disabled={isDeletingId === record.id}
+                    className={`rounded bg-red-600 px-3 py-1 text-white transition hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 ${
+                      isDeletingId === record.id ? "cursor-not-allowed opacity-70" : ""
+                    }`}
+                  >
+                    {isDeletingId === record.id ? "Deleting…" : "Delete"}
                   </button>
                 </li>
               ))}
@@ -595,6 +765,90 @@ const TeacherClassView = () => {
       </div>
 
       {/* Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Add Attendance</h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
+              Create a new attendance record for this class.
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Student Name</label>
+                <input
+                  type="text"
+                  value={newStudentName}
+                  onChange={(event) => setNewStudentName(event.target.value)}
+                  placeholder="Alex Johnson"
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                  Provide the student's full name.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Student ID (optional)</label>
+                <input
+                  type="text"
+                  value={newStudentId}
+                  onChange={(event) => setNewStudentId(event.target.value)}
+                  placeholder="123456"
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Attendance Date</label>
+                <input
+                  type="date"
+                  value={newAttendanceDate}
+                  onChange={(event) => setNewAttendanceDate(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Status</label>
+                <select
+                  value={newAttendanceStatus}
+                  onChange={(event) => setNewAttendanceStatus(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="Present">Present</option>
+                  <option value="Absent">Absent</option>
+                  <option value="Late">Late</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeCreateModal}
+                className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                disabled={isCreating}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateAttendance}
+                disabled={isCreating}
+                className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
+                  isCreating
+                    ? "cursor-not-allowed bg-unt-green dark:bg-unt-green"
+                    : "bg-unt-green hover:border-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
+                }`}
+              >
+                {isCreating ? "Saving…" : "Add attendance"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900">
@@ -629,6 +883,7 @@ const TeacherClassView = () => {
               >
                 <option value="Present">Present</option>
                 <option value="Absent">Absent</option>
+                <option value="Late">Late</option>
               </select>
             </div>
 
