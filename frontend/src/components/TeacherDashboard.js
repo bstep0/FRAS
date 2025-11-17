@@ -151,7 +151,7 @@ const TeacherDashboard = () => {
       <div className="space-y-8">
         <section className="glass-card">
           <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">
-            Welcome, {teacherInfo?.name || "Teacher"}
+            Welcome, {teacherInfo?.name || "Teacher"}!
           </h2>
 
           <dl className="mt-6 grid gap-4 sm:grid-cols-2">

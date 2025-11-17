@@ -90,7 +90,11 @@ const StudentLayout = ({ title, headerActions, children }) => {
         <div className="relative flex h-full flex-col p-8">
           <div className="flex items-center gap-4">
             <div>
-              <p className="text-lg font-semibold">Facial Recognition Attendance System</p>
+              <img
+                  src="/FRASLogo.png"
+                  alt="FRAS Logo"
+                  className="h-24 w-60 object-cover border-2 border-white shadow-md"
+                />
             </div>
           </div>
           <nav className="mt-10 space-y-2">
@@ -113,7 +117,7 @@ const StudentLayout = ({ title, headerActions, children }) => {
                   >
                     {item.icon}
                   </span>
-                  <span>{item.label}</span>
+                  <span className="text-base md:text-lg font-semibold">{item.label}</span>
                 </Link>
               );
             })}

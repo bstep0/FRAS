@@ -89,7 +89,11 @@ const TeacherLayout = ({ title, headerActions, children }) => {
         <div className="relative flex h-full flex-col p-8">
           <div className="flex items-center gap-4">
             <div>
-              <p className="text-lg font-semibold">Facial Recognition Attendance System</p>
+                <img
+                  src="/FRASLogo.png"
+                  alt="FRAS Logo"
+                  className="h-24 w-60 object-cover border-2 border-white shadow-md"
+                />
             </div>
           </div>
           <nav className="mt-10 space-y-2">
@@ -112,7 +116,7 @@ const TeacherLayout = ({ title, headerActions, children }) => {
                   >
                     {item.icon}
                   </span>
-                  <span>{item.label}</span>
+                  <span className="text-base md:text-lg font-semibold">{item.label}</span>
                 </Link>
               );
             })}
@@ -138,7 +142,7 @@ const TeacherLayout = ({ title, headerActions, children }) => {
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-b border-unt-green/10 bg-white/80 px-6 py-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/80">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-unt-green dark:text-unt-green/70">
-              Faculty Portal
+              Instructor Portal
             </p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{title}</h1>
           </div>

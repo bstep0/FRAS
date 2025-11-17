@@ -16,11 +16,6 @@ const statusStyles = {
     tone: "text-red-500",
     dot: "bg-red-500",
   },
-  Late: {
-    label: "Late",
-    tone: "text-amber-500",
-    dot: "bg-amber-500",
-  },
   Unknown: {
     label: "No record",
     tone: "text-slate-400",

@@ -1,3 +1,4 @@
+// TeacherClassView.js
 // The teacher's individual class view page is currently hardcoded and incomplete, but shows what the page will look like
 // It will be completed in capstone II
 
@@ -14,7 +15,7 @@ import {
   where,
   Timestamp,
 } from "firebase/firestore";
-import { auth, db } from "../firebaseConfig"; 
+import { auth, db } from "../firebaseConfig";
 import { useNotifications } from "../context/NotificationsContext";
 import ClassAttendanceChart from "./ClassAttendanceChart";
 import { EXPORT_ATTENDANCE_ENDPOINT } from "../config/api";
@@ -95,7 +96,6 @@ const resolveStudentName = (studentData, fallbackName, fallbackId) => {
 
 const TeacherClassView = () => {
   // URL param: /teacher/classes/:className
-  // We store it in classId for clarity and use it consistently everywhere
   const { className: classId } = useParams();
 
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -354,12 +354,12 @@ const TeacherClassView = () => {
       status === "Present" ? "Present" : status === "Absent" ? "Absent" : "Other";
 
     if (normalizedStatus === "Present") {
-      return "rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700";
+      return "rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300";
     }
     if (normalizedStatus === "Absent") {
-      return "rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700";
+      return "rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300";
     }
-    return "rounded-full bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700";
+    return "rounded-full bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 dark:bg-slate-700 dark:text-slate-200";
   };
 
   const handleExportAttendance = async () => {
@@ -395,7 +395,7 @@ const TeacherClassView = () => {
     try {
       const idToken = await user.getIdToken();
       const url = new URL(EXPORT_ATTENDANCE_ENDPOINT);
-      url.searchParams.set("classId", classId); // use classId consistently
+      url.searchParams.set("classId", classId);
       url.searchParams.set("startDate", startDate);
       url.searchParams.set("endDate", endDate);
 
@@ -412,9 +412,7 @@ const TeacherClassView = () => {
           try {
             const text = await response.text();
             if (text) errorMessage = text;
-          } catch {
-            /* ignore */
-          }
+          } catch { /* ignore */ }
         }
         setExportFeedback({ type: "error", message: errorMessage });
         return;
@@ -459,21 +457,21 @@ const TeacherClassView = () => {
 
   return (
     <TeacherLayout title={classId ? `${classId} Overview` : "Class Overview"}>
-      <div className="space-y-6">
+      <div className="space-y-6 text-gray-900 dark:text-slate-100">
         {/* Header actions */}
         <div className="flex items-center justify-between">
           <Link
             to="/teacher/classes"
-            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+            className="text-sm font-medium text-unt-green hover:text-unt-green dark:text-unt-green/90 dark:hover:text-unt-green"
           >
             ← Back to classes
           </Link>
         </div>
 
         {/* Attendance snapshot */}
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">Attendance Overview</h2>
-          <p className="mt-2 text-sm text-gray-600">
+        <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Attendance Overview</h2>
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
             Review class-wide attendance at a glance.
           </p>
           <div className="mt-6 flex justify-start">
@@ -482,21 +480,21 @@ const TeacherClassView = () => {
         </section>
 
         {/* Student list */}
-        <section className="rounded-lg bg-white p-6 shadow">
+        <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
           <h2 className="mb-4 text-2xl font-semibold">Student List</h2>
 
           {/* Search (non-functional placeholder for now) */}
           <input
             type="text"
             placeholder="Search student name"
-            className="mb-4 w-full rounded border p-2"
+            className="mb-4 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
             aria-label="Search student"
           />
 
           {isLoading ? (
-            <p className="text-sm text-gray-500">Loading attendance records…</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Loading attendance records…</p>
           ) : attendanceRecords.length === 0 ? (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-slate-400">
               No attendance records found for this class yet.
             </p>
           ) : (
@@ -504,12 +502,12 @@ const TeacherClassView = () => {
               {attendanceRecords.map((record) => (
                 <li
                   key={record.id}
-                  className="grid grid-cols-[2fr,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow"
+                  className="grid grid-cols-[2fr,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
                 >
                   <div>
                     <span className="text-lg font-semibold">{record.studentName}</span>
                     {record.formattedDate ? (
-                      <p className="text-sm text-gray-500">{record.formattedDate}</p>
+                      <p className="text-sm text-gray-500 dark:text-slate-400">{record.formattedDate}</p>
                     ) : null}
                   </div>
                   <span className={statusBadgeClasses(record.status)}>
@@ -518,7 +516,7 @@ const TeacherClassView = () => {
                   <button
                     type="button"
                     onClick={() => openModal(record)}
-                    className="rounded bg-blue-500 px-3 py-1 text-white transition hover:bg-blue-700"
+                    className="rounded bg-unt-green px-3 py-1 text-white transition hover:bg-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
                   >
                     Edit
                   </button>
@@ -529,9 +527,9 @@ const TeacherClassView = () => {
         </section>
 
         {/* Export Attendance */}
-        <section className="space-y-4 rounded-lg bg-white p-6 shadow">
+        <section className="space-y-4 rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
           <h2 className="text-2xl font-semibold">Export Attendance</h2>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-slate-300">
             Choose the date range you would like to export. A CSV file will be generated with all
             records that match your selection.
           </p>
@@ -539,7 +537,7 @@ const TeacherClassView = () => {
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label
-                className="mb-1 block text-sm font-medium text-gray-700"
+                className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300"
                 htmlFor="attendance-start-date"
               >
                 Start date
@@ -547,7 +545,7 @@ const TeacherClassView = () => {
               <input
                 id="attendance-start-date"
                 type="date"
-                className="w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 value={startDate}
                 max={endDate || undefined}
                 onChange={(event) => setStartDate(event.target.value)}
@@ -555,7 +553,7 @@ const TeacherClassView = () => {
             </div>
             <div>
               <label
-                className="mb-1 block text-sm font-medium text-gray-700"
+                className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300"
                 htmlFor="attendance-end-date"
               >
                 End date
@@ -563,7 +561,7 @@ const TeacherClassView = () => {
               <input
                 id="attendance-end-date"
                 type="date"
-                className="w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 value={endDate}
                 min={startDate || undefined}
                 onChange={(event) => setEndDate(event.target.value)}
@@ -576,7 +574,7 @@ const TeacherClassView = () => {
               type="button"
               onClick={handleExportAttendance}
               disabled={isExporting}
-              className={`rounded bg-green-500 px-6 py-2 font-semibold text-white transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 ${
+              className={`rounded bg-green-500 px-6 py-2 font-semibold text-white transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 dark:bg-unt-green dark:hover:bg-unt-green/90 dark:focus:ring-unt-green/60 dark:focus:ring-offset-slate-900 ${
                 isExporting ? "cursor-not-allowed opacity-60" : ""
               }`}
             >
@@ -587,7 +585,7 @@ const TeacherClassView = () => {
           {exportFeedback && (
             <p
               className={`text-sm ${
-                exportFeedback.type === "error" ? "text-red-600" : "text-green-600"
+                exportFeedback.type === "error" ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
               }`}
             >
               {exportFeedback.message}
@@ -599,17 +597,17 @@ const TeacherClassView = () => {
       {/* Modal */}
       {isModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="text-xl font-semibold text-gray-900">Edit Attendance</h2>
-            <p className="mt-2 text-sm text-gray-600">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Edit Attendance</h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
               Student: <strong>{selectedRecord.studentName}</strong>
             </p>
 
             {/* Date */}
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Select Date</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Select Date</label>
               <select
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 value={selectedDate}
                 onChange={(event) => setSelectedDate(event.target.value)}
               >
@@ -623,9 +621,9 @@ const TeacherClassView = () => {
 
             {/* Status */}
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Attendance Status</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Attendance Status</label>
               <select
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 value={attendanceStatus}
                 onChange={(event) => setAttendanceStatus(event.target.value)}
               >
@@ -636,16 +634,20 @@ const TeacherClassView = () => {
 
             {/* Reason */}
             <div className="mt-4">
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
                 Reason For Edit (Optional)
               </label>
               <textarea
-                className="w-full resize-y rounded border p-2"
+                className="w-full resize-y rounded border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 rows={3}
                 value={editReason}
                 onChange={(e) => setEditReason(e.target.value)}
-
+                maxLength={50}                             
+                aria-describedby="edit-reason-help"
               />
+              <div id="edit-reason-help" className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                {editReason.length}/50 characters
+              </div>
             </div>
 
             {/* Actions */}
@@ -653,7 +655,7 @@ const TeacherClassView = () => {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
                 disabled={isSaving}
               >
                 Cancel
@@ -663,7 +665,9 @@ const TeacherClassView = () => {
                 onClick={handleSave}
                 disabled={isSaving}
                 className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-                  isSaving ? "cursor-not-allowed bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
+                  isSaving
+                    ? "cursor-not-allowed bg-unt-green dark:bg-unt-green"
+                    : "bg-unt-green hover:border-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
                 }`}
               >
                 {isSaving ? "Saving…" : "Save changes"}

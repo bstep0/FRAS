@@ -134,7 +134,7 @@ const NotificationsPage = ({ title = "Notifications" }) => {
   return (
     <LayoutComponent title={title}>
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col justify-between gap-3 rounded-2xl border border-unt-green/10 bg-white/90 p-5 shadow-sm transition dark:border-slate-700/60 dark:bg-slate-900/70 md:flex-row md:items-center">
+        <div className="flex flex-col justify-between gap-3 rounded-2xl border border-unt-green/10 bg-white/90 p-5 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700/60 dark:bg-slate-900/70 md:flex-row md:items-center">
           <div>
             <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Inbox</h2>
             <p className="text-sm text-slate-600 dark:text-slate-300">
@@ -147,7 +147,7 @@ const NotificationsPage = ({ title = "Notifications" }) => {
               onClick={() => setFilter("all")}
               className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                 filter === "all"
-                  ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+                  ? "bg-unt-green text-white shadow-sm hover:border-unt-green"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
               }`}
             >
@@ -158,7 +158,7 @@ const NotificationsPage = ({ title = "Notifications" }) => {
               onClick={() => setFilter("unread")}
               className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                 filter === "unread"
-                  ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+                  ? "bg-unt-green text-white shadow-sm hover:border-unt-green"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
               }`}
             >
@@ -169,7 +169,7 @@ const NotificationsPage = ({ title = "Notifications" }) => {
               onClick={() => setFilter("read")}
               className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                 filter === "read"
-                  ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+                  ? "bg-unt-green text-white shadow-sm hover:border-unt-green"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
               }`}
             >
@@ -186,7 +186,7 @@ const NotificationsPage = ({ title = "Notifications" }) => {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-unt-green/10 bg-white/90 shadow-sm transition dark:border-slate-700/60 dark:bg-slate-900/70">
+        <div className="overflow-hidden rounded-2xl border border-unt-green/10 bg-white/90 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700/60 dark:bg-slate-900/70">
           {loading ? (
             <p className="px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-300">Loading your notifications…</p>
           ) : filteredNotifications.length ? (
