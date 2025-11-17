@@ -559,39 +559,41 @@ const TeacherStudentAttendance = () => {
           ) : attendanceRecords.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-slate-400">No attendance records found for this student.</p>
           ) : (
-            <ul className="space-y-4">
-              {attendanceRecords.map((record) => (
-                <li
-                  key={record.id}
-                  className="grid grid-cols-[2fr,auto,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
-                >
-                  <div>
-                    <span className="text-lg font-semibold">{record.studentName}</span>
-                    {record.formattedDate ? (
-                      <p className="text-sm text-gray-500 dark:text-slate-400">{record.formattedDate}</p>
-                    ) : null}
-                  </div>
-                  <span className={statusBadgeClasses(record.status)}>{displayStatus(record.status)}</span>
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(record)}
-                    className="rounded bg-unt-green px-3 py-1 text-white transition hover:bg-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
+            <div className="max-h-96 space-y-4 overflow-y-auto pr-1">
+              <ul className="space-y-4">
+                {attendanceRecords.map((record) => (
+                  <li
+                    key={record.id}
+                    className="grid grid-cols-[2fr,auto,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
                   >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => confirmDeleteRecord(record)}
-                    disabled={isDeletingId === record.id}
-                    className={`rounded bg-red-600 px-3 py-1 text-white transition hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 ${
-                      isDeletingId === record.id ? "cursor-not-allowed opacity-70" : ""
-                    }`}
-                  >
-                    {isDeletingId === record.id ? "Deleting…" : "Delete"}
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    <div>
+                      <span className="text-lg font-semibold">{record.studentName}</span>
+                      {record.formattedDate ? (
+                        <p className="text-sm text-gray-500 dark:text-slate-400">{record.formattedDate}</p>
+                      ) : null}
+                    </div>
+                    <span className={statusBadgeClasses(record.status)}>{displayStatus(record.status)}</span>
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(record)}
+                      className="rounded bg-unt-green px-3 py-1 text-white transition hover:bg-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => confirmDeleteRecord(record)}
+                      disabled={isDeletingId === record.id}
+                      className={`rounded bg-red-600 px-3 py-1 text-white transition hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 ${
+                        isDeletingId === record.id ? "cursor-not-allowed opacity-70" : ""
+                      }`}
+                    >
+                      {isDeletingId === record.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </section>
       </div>

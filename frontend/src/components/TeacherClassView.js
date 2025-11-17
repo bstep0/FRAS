@@ -2,19 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-  Timestamp,
-} from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { useNotifications } from "../context/NotificationsContext";
 import ClassAttendanceChart from "./ClassAttendanceChart";
@@ -68,11 +56,6 @@ const coerceToDate = (value) => {
   }
 
   return null;
-};
-
-const formatRecordDate = (value) => {
-  const parsed = coerceToDate(value);
-  return parsed ? formatDateLabel(parsed) : "";
 };
 
 const formatNameFromEmail = (email) => {
@@ -134,13 +117,6 @@ const TeacherClassView = () => {
   const { className: classId } = useParams();
 
   const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState(null);
-  const [attendanceStatus, setAttendanceStatus] = useState("Present");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [editReason, setEditReason] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeletingId, setIsDeletingId] = useState(null);
   const [classInfo, setClassInfo] = useState(null);
   const [enrolledStudents, setEnrolledStudents] = useState([]);
   const [rosterMap, setRosterMap] = useState(new Map());
@@ -148,15 +124,16 @@ const TeacherClassView = () => {
   const [endDate, setEndDate] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [exportFeedback, setExportFeedback] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [isRosterLoading, setIsRosterLoading] = useState(true);
   const { pushToast } = useNotifications();
 
   const fetchClassRoster = useCallback(async () => {
+    setIsRosterLoading(true);
     if (!classId) {
       setClassInfo(null);
       setEnrolledStudents([]);
       setRosterMap(new Map());
+      setIsRosterLoading(false);
       return;
     }
 
@@ -240,6 +217,8 @@ const TeacherClassView = () => {
         title: "Roster unavailable",
         message: "We couldn't load the class roster. Please try again shortly.",
       });
+    } finally {
+      setIsRosterLoading(false);
     }
   }, [classId, pushToast]);
 
@@ -248,8 +227,6 @@ const TeacherClassView = () => {
       setAttendanceRecords([]);
       return;
     }
-
-    setIsLoading(true);
 
     try {
       const attendanceRef = collection(db, "attendance");
@@ -345,8 +322,6 @@ const TeacherClassView = () => {
           "We couldn't load the attendance records for this class. Please try again.",
       });
       setAttendanceRecords([]);
-    } finally {
-      setIsLoading(false);
     }
   }, [classId, pushToast, rosterMap]);
 
@@ -355,39 +330,8 @@ const TeacherClassView = () => {
   }, [fetchClassRoster]);
 
   useEffect(() => {
-    fetchClassRoster();
-  }, [fetchClassRoster]);
-
-  useEffect(() => {
     fetchAttendanceRecords();
   }, [fetchAttendanceRecords]);
-
-  const generateDateOptions = useCallback(() => {
-    const options = [];
-    for (let i = 0; i < 21; i += 1) {
-      const date = new Date();
-      date.setHours(12, 0, 0, 0);
-      date.setDate(date.getDate() - i);
-      options.push({
-        value: date.toISOString(),
-        label: formatDateLabel(date),
-      });
-    }
-
-    if (selectedDate) {
-      const hasExisting = options.some((option) => option.value === selectedDate);
-      if (!hasExisting) {
-        options.unshift({
-          value: selectedDate,
-          label: formatRecordDate(selectedDate) || selectedDate,
-        });
-      }
-    }
-
-    return options;
-  }, [selectedDate]);
-
-  const dateOptions = useMemo(() => generateDateOptions(), [generateDateOptions]);
 
   const attendanceSummary = useMemo(() => {
     const summary = { Present: 0, Absent: 0, Pending: 0 };
@@ -418,153 +362,6 @@ const TeacherClassView = () => {
     return summary;
   }, [attendanceRecords]);
 
-  const openModal = (record) => {
-    if (!record) return;
-
-    const normalizedStatus =
-      record.status === "Present"
-        ? "Present"
-        : typeof record.status === "string" && record.status.toLowerCase().includes("pending")
-          ? "Pending"
-          : "Absent";
-
-    const recordDate = record.dateValue || coerceToDate(record.date);
-    const selectedDateValue = recordDate ? recordDate.toISOString() : "";
-
-    setSelectedRecord(record);
-    setAttendanceStatus(normalizedStatus);
-    setSelectedDate(selectedDateValue);
-    setEditReason(record.editReason || "");
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setSelectedRecord(null);
-    setAttendanceStatus("Present");
-    setSelectedDate("");
-    setEditReason("");
-  };
-
-  const closeCreateModal = () => {
-    setIsCreateModalOpen(false);
-    setNewStudentName("");
-    setNewStudentId("");
-    setNewAttendanceStatus("Present");
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
-    setNewAttendanceDate(today.toISOString().split("T")[0]);
-  };
-
-  const handleSave = async () => {
-    if (!selectedRecord) return;
-
-    const normalizedStatus =
-      attendanceStatus === "Present"
-        ? "Present"
-        : attendanceStatus === "Pending"
-          ? "Pending"
-          : "Absent";
-
-    if (!auth.currentUser) {
-      pushToast({
-        tone: "error",
-        title: "Update unavailable",
-        message: "You must be signed in to update attendance records.",
-      });
-      return;
-    }
-
-    setIsSaving(true);
-
-    const studentName = selectedRecord.studentName || "Student";
-    const trimmedEditReason = editReason.trim();
-
-    const parsedSelectedDate = selectedDate ? coerceToDate(selectedDate) : null;
-    const fallbackDateValue =
-      selectedRecord.dateValue || coerceToDate(selectedRecord.date) || null;
-    const finalDateValue = parsedSelectedDate || fallbackDateValue;
-    const dateToPersist = finalDateValue ? Timestamp.fromDate(finalDateValue) : null;
-
-    try {
-      const attendanceDocRef = doc(db, "attendance", selectedRecord.id);
-      await updateDoc(attendanceDocRef, {
-        status: normalizedStatus,
-        editedBy: auth.currentUser.uid,
-        editedAt: serverTimestamp(),
-        editReason: trimmedEditReason,
-        date: dateToPersist,
-      });
-
-      pushToast({
-        tone: "success",
-        title: "Attendance updated",
-        message: `${studentName}'s attendance was updated to ${normalizedStatus}.`,
-      });
-
-      closeModal();
-      await fetchAttendanceRecords();
-    } catch (error) {
-      console.error("Failed to update attendance record", error);
-      pushToast({
-        tone: "error",
-        title: "Update failed",
-        message: "We couldn't save the attendance update. Please try again.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const confirmDeleteRecord = async (record) => {
-    if (!record?.id) return;
-
-    const confirmed = window.confirm(
-      `Delete the attendance record for ${record.studentName || "this student"}?`
-    );
-
-    if (!confirmed) return;
-
-    setIsDeletingId(record.id);
-
-    try {
-      await deleteDoc(doc(db, "attendance", record.id));
-
-      pushToast({
-        tone: "success",
-        title: "Attendance removed",
-        message: "The attendance record has been deleted.",
-      });
-
-      await fetchAttendanceRecords();
-    } catch (error) {
-      console.error("Failed to delete attendance record", error);
-      pushToast({
-        tone: "error",
-        title: "Delete failed",
-        message: "We couldn't delete this attendance record. Please try again.",
-      });
-    } finally {
-      setIsDeletingId(null);
-    }
-  };
-
-  const statusBadgeClasses = (status) => {
-    const normalizedStatus =
-      status === "Present"
-        ? "Present"
-        : typeof status === "string" && status.toLowerCase().includes("pending")
-          ? "Pending"
-          : "Absent";
-
-    if (normalizedStatus === "Present") {
-      return "rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300";
-    }
-    if (normalizedStatus === "Pending") {
-      return "rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
-    }
-    return "rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300";
-  };
 
   const handleExportAttendance = async () => {
     setExportFeedback(null);
@@ -656,15 +453,6 @@ const TeacherClassView = () => {
     }
   };
 
-  const displayStatus = (status) => {
-    if (!status) return "Unknown";
-    const normalized = typeof status === "string" ? status.trim().toLowerCase() : "";
-    if (!normalized) return "Unknown";
-    if (normalized.includes("pending")) return "Pending";
-    if (normalized.includes("present")) return "Present";
-    return "Absent";
-  };
-
   return (
     <TeacherLayout title={classId ? `${classId} Overview` : "Class Overview"}>
       <div className="space-y-6 text-gray-900 dark:text-slate-100">
@@ -676,13 +464,6 @@ const TeacherClassView = () => {
           >
             ← Back to classes
           </Link>
-          <button
-            type="button"
-            onClick={() => setIsCreateModalOpen(true)}
-            className="rounded bg-unt-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-unt-green/90 focus:outline-none focus:ring-2 focus:ring-unt-green focus:ring-offset-2 dark:focus:ring-offset-slate-900"
-          >
-            Add Attendance
-          </button>
         </div>
 
         {/* Attendance snapshot */}
@@ -712,16 +493,19 @@ const TeacherClassView = () => {
             ) : null}
           </div>
 
-          {isLoading ? (
+          {isRosterLoading ? (
             <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">Loading roster…</p>
           ) : enrolledStudents.length === 0 ? (
             <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">
               No students are enrolled in this class yet.
             </p>
           ) : (
-            <ul className="mt-4 divide-y divide-gray-200 dark:divide-slate-700">
+            <ul className="mt-5 space-y-3">
               {enrolledStudents.map((student) => (
-                <li key={student.id} className="flex items-center justify-between gap-3 py-3">
+                <li
+                  key={student.id}
+                  className="flex items-center justify-between gap-4 rounded-lg bg-gray-50 px-4 py-3 shadow-sm transition hover:shadow-md dark:bg-slate-800"
+                >
                   <div>
                     <p className="text-lg font-semibold text-gray-900 dark:text-slate-100">{student.name}</p>
                     <p className="text-xs text-gray-500 dark:text-slate-400">ID: {student.id}</p>
@@ -732,54 +516,6 @@ const TeacherClassView = () => {
                   >
                     View attendance
                   </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Attendance records */}
-        <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
-          <h2 className="mb-2 text-2xl font-semibold">Attendance Records</h2>
-          <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">
-            Review or adjust existing attendance entries for this class.
-          </p>
-
-          {isLoading ? (
-            <p className="text-sm text-gray-500 dark:text-slate-400">Loading attendance records…</p>
-          ) : attendanceRecords.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-slate-400">No attendance records found for this class yet.</p>
-          ) : (
-            <ul className="space-y-4">
-              {filteredRecords.map((record) => (
-                <li
-                  key={record.id}
-                  className="grid grid-cols-[2fr,auto,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
-                >
-                  <div>
-                    <span className="text-lg font-semibold">{record.studentName}</span>
-                    {record.formattedDate ? (
-                      <p className="text-sm text-gray-500 dark:text-slate-400">{record.formattedDate}</p>
-                    ) : null}
-                  </div>
-                  <span className={statusBadgeClasses(record.status)}>{displayStatus(record.status)}</span>
-                  <button
-                    type="button"
-                    onClick={() => openModal(record)}
-                    className="rounded bg-unt-green px-3 py-1 text-white transition hover:bg-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => confirmDeleteRecord(record)}
-                    disabled={isDeletingId === record.id}
-                    className={`rounded bg-red-600 px-3 py-1 text-white transition hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 ${
-                      isDeletingId === record.id ? "cursor-not-allowed opacity-70" : ""
-                    }`}
-                  >
-                    {isDeletingId === record.id ? "Deleting…" : "Delete"}
-                  </button>
                 </li>
               ))}
             </ul>
@@ -854,90 +590,8 @@ const TeacherClassView = () => {
         </section>
       </div>
 
-      {isModalOpen && selectedRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Edit Attendance</h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
-              Student: <strong>{selectedRecord.studentName}</strong>
-            </p>
-
-            {/* Date */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Select Date</label>
-              <select
-                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                value={selectedDate}
-                onChange={(event) => setSelectedDate(event.target.value)}
-              >
-                {dateOptions.map((dateOption) => (
-                  <option key={dateOption.value} value={dateOption.value}>
-                    {dateOption.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Status */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Attendance Status</label>
-              <select
-                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                value={attendanceStatus}
-                onChange={(event) => setAttendanceStatus(event.target.value)}
-              >
-                <option value="Present">Present</option>
-                <option value="Absent">Absent</option>
-                <option value="Pending">Pending</option>
-              </select>
-            </div>
-
-            {/* Reason */}
-            <div className="mt-4">
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
-                Reason For Edit (Optional)
-              </label>
-              <textarea
-                className="w-full resize-y rounded border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                rows={3}
-                value={editReason}
-                onChange={(e) => setEditReason(e.target.value)}
-                maxLength={50}                             
-                aria-describedby="edit-reason-help"
-              />
-              <div id="edit-reason-help" className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                {editReason.length}/50 characters
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-                className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-                  isSaving
-                    ? "cursor-not-allowed bg-unt-green dark:bg-unt-green"
-                    : "bg-unt-green hover:border-unt-green dark:bg-unt-green dark:hover:bg-unt-green/90"
-                }`}
-              >
-                {isSaving ? "Saving…" : "Save changes"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </TeacherLayout>
-  );
-};
+      </TeacherLayout>
+    );
+  };
 
 export default TeacherClassView;
