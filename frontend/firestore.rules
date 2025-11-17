@@ -6,6 +6,28 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function authRole() {
+      return request.auth != null && request.auth.token.role is string
+        ? lower(request.auth.token.role)
+        : null;
+    }
+
+    function isAdmin() {
+      return authRole() == 'admin';
+    }
+
+    function isTeacher() {
+      return authRole() == 'teacher';
+    }
+
+    function isStudent() {
+      return authRole() == 'student';
+    }
+
+    function staffCanAccess() {
+      return isSignedIn() && (isAdmin() || isTeacher());
+    }
+
     function lowerAuthEmail() {
       return request.auth != null && request.auth.token.email != null
         ? lower(request.auth.token.email)
@@ -18,6 +40,44 @@ service cloud.firestore {
         (request.auth != null && request.auth.uid in targets) ||
         (lowerAuthEmail() != null && lowerAuthEmail() in targets)
       );
+    }
+
+    function hasUserIdForRole(userId, role) {
+      return role == 'admin' && userId.matches('^A[0-9]+$')
+        || role == 'teacher' && userId.matches('^T[0-9]+$')
+        || role == 'student' && userId.matches('^S[0-9]+$');
+    }
+
+    function requestEmailMatches(resourceData) {
+      return request.auth != null && resourceData.email is string
+        && lower(resourceData.email) == lowerAuthEmail();
+    }
+
+    match /users/{userId} {
+      allow get, list: if staffCanAccess() || (isStudent() && requestEmailMatches(resource.data));
+
+      allow create: if staffCanAccess()
+        && request.resource.data.role is string
+        && hasUserIdForRole(userId, lower(request.resource.data.role));
+
+      allow update, delete: if staffCanAccess()
+        && resource.data.role is string
+        && hasUserIdForRole(userId, lower(resource.data.role));
+    }
+
+    match /classes/{classId} {
+      allow read, write: if staffCanAccess();
+
+      allow get, list: if isStudent() && isSignedIn();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read, write: if staffCanAccess();
+
+      allow get, list: if isStudent() && isSignedIn()
+        && ((resource.data.studentID != null && resource.data.studentID == request.auth.uid)
+          || (resource.data.studentId != null && resource.data.studentId == request.auth.uid)
+          || requestEmailMatches(resource.data));
     }
 
     match /notifications/{notificationId} {

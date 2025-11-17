@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  addDoc,
   arrayRemove,
   arrayUnion,
   collection,
@@ -8,6 +7,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
@@ -15,11 +15,53 @@ import AdminLayout from "./AdminLayout";
 import { useNotifications } from "../context/NotificationsContext";
 
 const defaultFormState = {
+  userId: "",
   fname: "",
   lname: "",
   email: "",
   role: "student",
   classes: [],
+};
+
+const idPrefixByRole = {
+  student: "S",
+  teacher: "T",
+  admin: "A",
+};
+
+const idSeedByRole = {
+  student: 1000,
+  teacher: 1000,
+  admin: 1000,
+};
+
+const isValidUserIdForRole = (userId, role) => {
+  const prefix = idPrefixByRole[role];
+  if (!prefix) return false;
+  const match = new RegExp(`^${prefix}(\\d+)$`, "i").exec(userId || "");
+  return Boolean(match);
+};
+
+const buildNextIdsByRole = (users) => {
+  const nextIds = { ...idSeedByRole };
+
+  users.forEach((user) => {
+    const role = (user.role || "").toLowerCase();
+    const prefix = idPrefixByRole[role];
+    if (!prefix) return;
+
+    const match = new RegExp(`^${prefix}(\\d+)$`, "i").exec(user.id || "");
+    if (match && match[1]) {
+      const numericPart = parseInt(match[1], 10);
+      if (!Number.isNaN(numericPart)) {
+        nextIds[role] = Math.max(nextIds[role], numericPart + 1);
+      }
+    }
+  });
+
+  return Object.fromEntries(
+    Object.entries(nextIds).map(([role, seed]) => [role, `${idPrefixByRole[role]}${seed}`])
+  );
 };
 
 const AdminUsers = () => {
@@ -32,6 +74,8 @@ const AdminUsers = () => {
   const [editingUserId, setEditingUserId] = useState(null);
 
   const { pushToast } = useNotifications();
+
+  const nextIdsByRole = useMemo(() => buildNextIdsByRole(users), [users]);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -51,6 +95,7 @@ const AdminUsers = () => {
           classes: Array.isArray(data.classes) ? data.classes.filter(Boolean) : [],
           fname: data.fname || "",
           lname: data.lname || "",
+          userId: docSnapshot.id,
         };
       });
       setUsers(normalized);
@@ -94,7 +139,7 @@ const AdminUsers = () => {
   }, []);
 
   const resetForm = () => {
-    setFormState(defaultFormState);
+    setFormState({ ...defaultFormState, userId: nextIdsByRole[defaultFormState.role] || "" });
     setEditingUserId(null);
   };
 
@@ -105,6 +150,7 @@ const AdminUsers = () => {
 
   const openEditModal = (user) => {
     setFormState({
+      userId: user.id,
       fname: user.fname || "",
       lname: user.lname || "",
       email: user.email || "",
@@ -121,7 +167,16 @@ const AdminUsers = () => {
   };
 
   const handleInputChange = (field, value) => {
-    setFormState((prev) => ({ ...prev, [field]: value }));
+    setFormState((prev) => {
+      const updated = { ...prev, [field]: value };
+
+      if (field === "role" && !editingUserId) {
+        const normalizedRole = value.toString().toLowerCase();
+        updated.userId = nextIdsByRole[normalizedRole] || "";
+      }
+
+      return updated;
+    });
   };
 
   const toggleClassSelection = (classId) => {
@@ -205,13 +260,47 @@ const AdminUsers = () => {
 
     setIsSaving(true);
     try {
+      const normalizedRole = formState.role.toLowerCase();
+      const targetUserId = (editingUserId || formState.userId || "").trim();
+
+      if (!targetUserId) {
+        pushToast({
+          tone: "warning",
+          title: "Missing ID",
+          message: "Please provide an ID for this user (e.g., S1000).",
+        });
+        return;
+      }
+
+      if (!isValidUserIdForRole(targetUserId, normalizedRole)) {
+        pushToast({
+          tone: "warning",
+          title: "Invalid ID format",
+          message: "IDs must start with A, T, or S followed by numbers to match the user role.",
+        });
+        return;
+      }
+
+      if (!editingUserId && users.some((user) => user.id === targetUserId)) {
+        pushToast({
+          tone: "warning",
+          title: "Duplicate ID",
+          message: "Another user already has this ID. Please choose a unique value.",
+        });
+        return;
+      }
+
       const payload = {
         ...formState,
         email: formState.email.trim(),
         fname: formState.fname.trim(),
         lname: formState.lname.trim(),
         classes: formState.classes,
-        role: formState.role.toLowerCase(),
+        role: normalizedRole,
+        userId: targetUserId,
+        studentID: normalizedRole === "student" ? targetUserId : formState.studentID,
+        teacherID: normalizedRole === "teacher" ? targetUserId : formState.teacherID,
+        adminID: normalizedRole === "admin" ? targetUserId : formState.adminID,
       };
 
       if (editingUserId) {
@@ -227,8 +316,9 @@ const AdminUsers = () => {
         );
         pushToast({ tone: "success", title: "User updated", message: "Changes saved successfully." });
       } else {
-        const docRef = await addDoc(collection(db, "users"), payload);
-        await syncClassAssignments(docRef.id, payload.classes, [], payload.role);
+        const docRef = doc(db, "users", targetUserId);
+        await setDoc(docRef, payload);
+        await syncClassAssignments(targetUserId, payload.classes, [], payload.role);
         pushToast({ tone: "success", title: "User created", message: "The user was added successfully." });
       }
 
@@ -394,6 +484,22 @@ const AdminUsers = () => {
                     className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white/90 px-4 py-2 text-sm text-slate-900 shadow-sm transition focus:border-unt-green focus:outline-none focus:ring-2 focus:ring-unt-green/30 dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-white"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-200">User ID</label>
+                <input
+                  type="text"
+                  value={formState.userId}
+                  onChange={(event) => handleInputChange("userId", event.target.value)}
+                  placeholder={`${idPrefixByRole[formState.role]}${idSeedByRole[formState.role]}`}
+                  disabled={Boolean(editingUserId)}
+                  className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white/90 px-4 py-2 text-sm text-slate-900 shadow-sm transition focus:border-unt-green focus:outline-none focus:ring-2 focus:ring-unt-green/30 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-white disabled:dark:bg-slate-800/60"
+                />
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  IDs must start with A, T, or S and a number sequence (e.g., S1000). New students start at
+                  S1000 and increment from the highest existing ID.
+                </p>
               </div>
 
               <div>
