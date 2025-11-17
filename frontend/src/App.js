@@ -15,6 +15,7 @@ import StudentClassView from "./components/StudentClassView";
 import NotificationsPage from "./components/notifications/NotificationsPage";
 import { NotificationsProvider } from "./context/NotificationsContext";
 import PrivacyPolicy from "./components/PrivacyPolicy";
+import RequireRole from "./components/RequireRole";
 
 function App() {
   return (
@@ -25,26 +26,114 @@ function App() {
           <Route path="/" element={<LoginPage />} />
 
           {/* Admin Routes */}
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/users" element={<AdminUsers />} />
-          <Route path="/admin/classes" element={<AdminClasses />} />
+          <Route
+            path="/admin"
+            element={
+              <RequireRole role="admin">
+                <AdminDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <RequireRole role="admin">
+                <AdminUsers />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/classes"
+            element={
+              <RequireRole role="admin">
+                <AdminClasses />
+              </RequireRole>
+            }
+          />
 
           {/* Teacher Routes */}
-          <Route path="/teacher" element={<TeacherDashboard />} />
-          <Route path="/teacher/classes" element={<TeacherClasses />} />
-          <Route path="/teacher/classes/:className" element={<TeacherClassView />} />
+          <Route
+            path="/teacher"
+            element={
+              <RequireRole role="teacher">
+                <TeacherDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/classes"
+            element={
+              <RequireRole role="teacher">
+                <TeacherClasses />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/classes/:className"
+            element={
+              <RequireRole role="teacher">
+                <TeacherClassView />
+              </RequireRole>
+            }
+          />
           <Route
             path="/teacher/classes/:className/students/:studentId"
-            element={<TeacherStudentAttendance />}
+            element={
+              <RequireRole role="teacher">
+                <TeacherStudentAttendance />
+              </RequireRole>
+            }
           />
-          <Route path="/teacher/notifications" element={<NotificationsPage title="Notifications" />} />
+          <Route
+            path="/teacher/notifications"
+            element={
+              <RequireRole role="teacher">
+                <NotificationsPage title="Notifications" />
+              </RequireRole>
+            }
+          />
 
           {/* Student Routes */}
-          <Route path="/student" element={<StudentDashboard />} />
-          <Route path="/student/classes" element={<StudentClasses />} />
-          <Route path="/student/classes/:classId" element={<StudentClassView key={window.location.pathname} />} />
-          <Route path="/student/notifications" element={<NotificationsPage />} />
-          <Route path="/student/messages" element={<StudentMessages />} />
+          <Route
+            path="/student"
+            element={
+              <RequireRole role="student">
+                <StudentDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/classes"
+            element={
+              <RequireRole role="student">
+                <StudentClasses />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/classes/:classId"
+            element={
+              <RequireRole role="student">
+                <StudentClassView key={window.location.pathname} />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/notifications"
+            element={
+              <RequireRole role="student">
+                <NotificationsPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/messages"
+            element={
+              <RequireRole role="student">
+                <StudentMessages />
+              </RequireRole>
+            }
+          />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         </Routes>
       </Router>
