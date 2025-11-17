@@ -7,6 +7,15 @@ runConfig:
   # cpu: 1
   # memoryMiB: 512
 
+# Static asset configuration to mirror Firebase Hosting behavior when deploying
+# through App Hosting. The build output is served from the same folder and
+# client-side routes fallback to index.html.
+static:
+  public: build
+  rewrites:
+    - source: "**"
+      destination: "/index.html"
+
 # Environment variables and secrets.
 # env:
   # Configure environment variables.
