@@ -97,16 +97,13 @@ const resolveStudentName = (studentData, fallbackName, fallbackId) => {
 
     const emailName = formatNameFromEmail(email);
     if (emailName) return emailName;
-
-    return null;
-  })();
-
-  if (preferredName) return preferredName;
+  }
 
   if (fallbackName) {
     const formattedFallback = formatNameFromEmail(fallbackName) || fallbackName;
     if (formattedFallback.trim()) return formattedFallback;
   }
+
   if (fallbackId) return fallbackId;
 
   return "Unknown Student";
@@ -203,7 +200,9 @@ const TeacherClassView = () => {
         };
       });
 
-      resolvedRoster.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      resolvedRoster.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+      );
 
       setEnrolledStudents(resolvedRoster);
       setRosterMap(rosterMapCopy);
@@ -292,8 +291,8 @@ const TeacherClassView = () => {
             ? studentData
             : { ...studentData, name: studentName }
           : record.studentID
-            ? { id: record.studentID, name: studentName }
-            : null;
+          ? { id: record.studentID, name: studentName }
+          : null;
 
         const dateValue = coerceToDate(record.date);
 
@@ -362,7 +361,6 @@ const TeacherClassView = () => {
     return summary;
   }, [attendanceRecords]);
 
-
   const handleExportAttendance = async () => {
     setExportFeedback(null);
 
@@ -413,7 +411,9 @@ const TeacherClassView = () => {
           try {
             const text = await response.text();
             if (text) errorMessage = text;
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
         setExportFeedback({ type: "error", message: errorMessage });
         return;
@@ -468,7 +468,9 @@ const TeacherClassView = () => {
 
         {/* Attendance snapshot */}
         <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Attendance Overview</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
+            Attendance Overview
+          </h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
             Review class-wide attendance at a glance.
           </p>
@@ -486,15 +488,12 @@ const TeacherClassView = () => {
                 Select a student to open their attendance dashboard and create records.
               </p>
             </div>
-            {classInfo?.name ? (
-              <span className="rounded-full bg-unt-green/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-unt-green dark:bg-unt-green/20">
-                {classInfo.name}
-              </span>
-            ) : null}
           </div>
 
           {isRosterLoading ? (
-            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">Loading roster…</p>
+            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">
+              Loading roster…
+            </p>
           ) : enrolledStudents.length === 0 ? (
             <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">
               No students are enrolled in this class yet.
@@ -507,8 +506,12 @@ const TeacherClassView = () => {
                   className="flex items-center justify-between gap-4 rounded-lg bg-gray-50 px-4 py-3 shadow-sm transition hover:shadow-md dark:bg-slate-800"
                 >
                   <div>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-slate-100">{student.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">ID: {student.id}</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                      {student.name}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      ID: {student.id}
+                    </p>
                   </div>
                   <Link
                     to={`/teacher/classes/${classId}/students/${student.id}`}
@@ -581,7 +584,9 @@ const TeacherClassView = () => {
           {exportFeedback && (
             <p
               className={`text-sm ${
-                exportFeedback.type === "error" ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+                exportFeedback.type === "error"
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-green-600 dark:text-green-400"
               }`}
             >
               {exportFeedback.message}
@@ -589,9 +594,8 @@ const TeacherClassView = () => {
           )}
         </section>
       </div>
-
-      </TeacherLayout>
-    );
-  };
+    </TeacherLayout>
+  );
+};
 
 export default TeacherClassView;

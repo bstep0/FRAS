@@ -156,13 +156,6 @@ const TeacherClasses = () => {
             )}
           </div>
         </section>
-
-        <section className="glass-card text-sm text-slate-600 dark:text-slate-300">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Recent Attendance Updates</h3>
-          <p className="mt-2">
-            Attendance updates will appear here when students begin checking in.
-          </p>
-        </section>
       </div>
     </TeacherLayout>
   );

@@ -511,7 +511,7 @@ const TeacherStudentAttendance = () => {
   }, [selectedDate]);
 
   return (
-    <TeacherLayout title={studentName ? `${studentName} Attendance` : "Student Attendance"}>
+    <TeacherLayout title={studentName ? `${studentName}'s Attendance` : "Student Attendance"}>
       <div className="space-y-6 text-gray-900 dark:text-slate-100">
         <div className="flex items-center justify-between">
           <Link
@@ -520,26 +520,7 @@ const TeacherStudentAttendance = () => {
           >
             ← Back to class
           </Link>
-          <button
-            type="button"
-            onClick={() => setIsCreateModalOpen(true)}
-            className="rounded bg-unt-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-unt-green/90 focus:outline-none focus:ring-2 focus:ring-unt-green focus:ring-offset-2 dark:focus:ring-offset-slate-900"
-            disabled={!isRostered}
-          >
-            Add Attendance
-          </button>
         </div>
-
-        <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">{studentName}</h2>
-          <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">Class: {classInfo?.name || classId}</p>
-          {!isRostered ? (
-            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-              This student is not listed as enrolled in this class. Attendance cannot be added.
-            </p>
-          ) : null}
-        </section>
-
         <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Attendance Overview</h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
@@ -549,15 +530,31 @@ const TeacherStudentAttendance = () => {
             <ClassAttendanceChart attendanceSummary={attendanceSummary} />
           </div>
         </section>
-
         <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
-          <h2 className="mb-2 text-2xl font-semibold">Attendance Records</h2>
-          <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">Review or edit this student's attendance history.</p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-2xl font-semibold">Attendance Records</h2>
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="rounded bg-unt-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-unt-green/90 focus:outline-none focus:ring-2 focus:ring-unt-green focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+              disabled={!isRostered}
+            >
+              Add Attendance
+            </button>
+          </div>
+
+          <p className="mb-4 text-sm text-gray-600 dark:text-slate-300">
+            Review or edit this student's attendance history.
+          </p>
 
           {isLoading ? (
-            <p className="text-sm text-gray-500 dark:text-slate-400">Loading attendance records…</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              Loading attendance records…
+            </p>
           ) : attendanceRecords.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-slate-400">No attendance records found for this student.</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              No attendance records found for this student.
+            </p>
           ) : (
             <div className="max-h-96 space-y-4 overflow-y-auto pr-1">
               <ul className="space-y-4">
@@ -567,12 +564,18 @@ const TeacherStudentAttendance = () => {
                     className="grid grid-cols-[2fr,auto,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
                   >
                     <div>
-                      <span className="text-lg font-semibold">{record.studentName}</span>
+                      <span className="text-lg font-semibold">
+                        {record.studentName}
+                      </span>
                       {record.formattedDate ? (
-                        <p className="text-sm text-gray-500 dark:text-slate-400">{record.formattedDate}</p>
+                        <p className="text-sm text-gray-500 dark:text-slate-400">
+                          {record.formattedDate}
+                        </p>
                       ) : null}
                     </div>
-                    <span className={statusBadgeClasses(record.status)}>{displayStatus(record.status)}</span>
+                    <span className={statusBadgeClasses(record.status)}>
+                      {displayStatus(record.status)}
+                    </span>
                     <button
                       type="button"
                       onClick={() => openEditModal(record)}
@@ -585,7 +588,9 @@ const TeacherStudentAttendance = () => {
                       onClick={() => confirmDeleteRecord(record)}
                       disabled={isDeletingId === record.id}
                       className={`rounded bg-red-600 px-3 py-1 text-white transition hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 ${
-                        isDeletingId === record.id ? "cursor-not-allowed opacity-70" : ""
+                        isDeletingId === record.id
+                          ? "cursor-not-allowed opacity-70"
+                          : ""
                       }`}
                     >
                       {isDeletingId === record.id ? "Deleting…" : "Delete"}
