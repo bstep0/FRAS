@@ -2,10 +2,6 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import SignOutButton from "./SignOutButton";
-import NotificationsBell from "./notifications/NotificationsBell";
-import NotificationBanner from "./notifications/NotificationBanner";
-import NotificationToast from "./notifications/NotificationToast";
-import { useNotifications } from "../context/NotificationsContext";
 import useUserProfile from "../hooks/useUserProfile";
 
 const iconClass = "h-5 w-5";
@@ -81,8 +77,6 @@ const navigationItems = [
 
 const AdminLayout = ({ title, headerActions, children }) => {
   const location = useLocation();
-  const { bannerNotification, toastNotification, dismissBanner, dismissToast } =
-    useNotifications();
   const { displayName, email } = useUserProfile();
 
   return (
@@ -151,21 +145,14 @@ const AdminLayout = ({ title, headerActions, children }) => {
             {headerActions}
             <ThemeToggle />
             <SignOutButton />
-            <NotificationsBell />
           </div>
         </header>
         <main className="relative flex-1 overflow-y-auto px-4 py-8 sm:px-8">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-            {bannerNotification ? (
-              <NotificationBanner notification={bannerNotification} onDismiss={dismissBanner} />
-            ) : null}
             {children}
           </div>
         </main>
       </div>
-      {toastNotification ? (
-        <NotificationToast toast={toastNotification} onDismiss={dismissToast} />
-      ) : null}
     </div>
   );
 };
