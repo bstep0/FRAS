@@ -11,6 +11,7 @@ import TeacherClassView from "./components/TeacherClassView";
 import StudentClassView from "./components/StudentClassView";
 import NotificationsPage from "./components/notifications/NotificationsPage";
 import { NotificationsProvider } from "./context/NotificationsContext";
+import PrivacyPolicy from "./components/PrivacyPolicy";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
           <Route path="/student/classes/:classId" element={<StudentClassView key={window.location.pathname} />} />
           <Route path="/student/notifications" element={<NotificationsPage />} />
           <Route path="/student/messages" element={<StudentMessages />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         </Routes>
       </Router>
     </NotificationsProvider>

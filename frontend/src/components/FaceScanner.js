@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   FACE_RECOGNITION_ENDPOINT,
   FINALIZE_ATTENDANCE_ENDPOINT,
@@ -15,11 +15,22 @@ const FaceScanner = ({ selectedClass, studentId }) => {
   const navigationTimeoutRef = useRef(null);
   const isMountedRef = useRef(false);
 
+  const getInitialConsent = () => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem("faceScannerConsent") === "true";
+  };
+
+  const initialConsent = getInitialConsent();
+
   const [scanning, setScanning] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isPending, setIsPending] = useState(false);
   const [captureDisabled, setCaptureDisabled] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(null);
+  const [hasConsented, setHasConsented] = useState(initialConsent);
+  const [consentError, setConsentError] = useState(
+    initialConsent ? "" : "Please agree to the privacy policy to enable scanning."
+  );
 
   const clearPendingTimers = useCallback(() => {
     if (finalizeTimeoutRef.current) {
@@ -111,6 +122,11 @@ const FaceScanner = ({ selectedClass, studentId }) => {
       stopVideo();
     };
   }, [startVideo, stopVideo, clearPendingTimers]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem("faceScannerConsent", hasConsented ? "true" : "false");
+  }, [hasConsented]);
 
   const finalizeAttendance = useCallback(
     async (recordId) => {
@@ -208,6 +224,11 @@ const FaceScanner = ({ selectedClass, studentId }) => {
 
   const capturePhoto = async () => {
     if (scanning || captureDisabled || !videoRef.current) return;
+
+    if (!hasConsented) {
+      setConsentError("Please agree to the privacy policy before starting your scan.");
+      return;
+    }
 
     const video = videoRef.current;
     const width = video.videoWidth || 640;
@@ -317,9 +338,43 @@ const FaceScanner = ({ selectedClass, studentId }) => {
           playsInline
           className="w-72 h-72 bg-black rounded"
         />
+
+        <div className="mt-4 w-full rounded-xl border border-slate-200 bg-white/80 p-3 text-left shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <label className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-unt-green focus:ring-unt-green"
+              checked={hasConsented}
+              onChange={(event) => {
+                setHasConsented(event.target.checked);
+                if (event.target.checked) {
+                  setConsentError("");
+                }
+              }}
+            />
+            <span>
+              I agree to the{" "}
+              <Link
+                to="/privacy-policy"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-unt-green underline decoration-2 decoration-unt-green/60 underline-offset-2"
+              >
+                Privacy Policy
+              </Link>{" "}
+              and consent to the use of my photo for attendance verification.
+            </span>
+          </label>
+          {consentError ? (
+            <p className="mt-2 text-xs font-medium text-red-600" role="alert">
+              {consentError}
+            </p>
+          ) : null}
+        </div>
+
         <button
           onClick={capturePhoto}
-          disabled={scanning || captureDisabled}
+          disabled={scanning || captureDisabled || !hasConsented}
           className={`bg-green-600 text-white px-3 py-1 rounded mt-4 disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {buttonLabel()}
