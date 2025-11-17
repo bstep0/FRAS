@@ -1,10 +1,9 @@
 // TeacherClassView.js
-// The teacher's individual class view page is currently hardcoded and incomplete, but shows what the page will look like
-// It will be completed in capstone II
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -76,6 +75,20 @@ const formatRecordDate = (value) => {
   return parsed ? formatDateLabel(parsed) : "";
 };
 
+const formatNameFromEmail = (email) => {
+  if (typeof email !== "string") return "";
+
+  const [localPart] = email.split("@");
+  if (!localPart) return "";
+
+  return localPart
+    .split(/[._]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+    .trim();
+};
+
 const resolveStudentName = (studentData, fallbackName, fallbackId) => {
   if (studentData) {
     const {
@@ -98,10 +111,19 @@ const resolveStudentName = (studentData, fallbackName, fallbackId) => {
       .join(" ")
       .trim();
     if (combined) return combined;
-    if (email) return email;
-  }
 
-  if (fallbackName) return fallbackName;
+    const emailName = formatNameFromEmail(email);
+    if (emailName) return emailName;
+
+    return null;
+  })();
+
+  if (preferredName) return preferredName;
+
+  if (fallbackName) {
+    const formattedFallback = formatNameFromEmail(fallbackName) || fallbackName;
+    if (formattedFallback.trim()) return formattedFallback;
+  }
   if (fallbackId) return fallbackId;
 
   return "Unknown Student";
@@ -127,6 +149,7 @@ const TeacherClassView = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportFeedback, setExportFeedback] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const { pushToast } = useNotifications();
 
   const fetchClassRoster = useCallback(async () => {
@@ -261,9 +284,13 @@ const TeacherClassView = () => {
             const studentRef = doc(db, "users", studentId);
             const studentSnapshot = await getDoc(studentRef);
             if (studentSnapshot.exists()) {
+              const studentData = studentSnapshot.data();
+              const studentName = resolveStudentName(studentData, null, studentSnapshot.id);
+
               studentMap.set(studentId, {
                 id: studentSnapshot.id,
-                ...studentSnapshot.data(),
+                ...studentData,
+                name: studentName,
               });
             } else {
               studentMap.set(studentId, null);
@@ -283,11 +310,19 @@ const TeacherClassView = () => {
           record.studentID
         );
 
+        const studentWithName = studentData
+          ? studentData.name
+            ? studentData
+            : { ...studentData, name: studentName }
+          : record.studentID
+            ? { id: record.studentID, name: studentName }
+            : null;
+
         const dateValue = coerceToDate(record.date);
 
         return {
           ...record,
-          student: studentData,
+          student: studentWithName,
           studentName,
           dateValue,
           formattedDate: dateValue ? formatDateLabel(dateValue) : "",
@@ -314,6 +349,10 @@ const TeacherClassView = () => {
       setIsLoading(false);
     }
   }, [classId, pushToast, rosterMap]);
+
+  useEffect(() => {
+    fetchClassRoster();
+  }, [fetchClassRoster]);
 
   useEffect(() => {
     fetchClassRoster();
@@ -405,6 +444,16 @@ const TeacherClassView = () => {
     setAttendanceStatus("Present");
     setSelectedDate("");
     setEditReason("");
+  };
+
+  const closeCreateModal = () => {
+    setIsCreateModalOpen(false);
+    setNewStudentName("");
+    setNewStudentId("");
+    setNewAttendanceStatus("Present");
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    setNewAttendanceDate(today.toISOString().split("T")[0]);
   };
 
   const handleSave = async () => {
@@ -627,6 +676,13 @@ const TeacherClassView = () => {
           >
             ← Back to classes
           </Link>
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="rounded bg-unt-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-unt-green/90 focus:outline-none focus:ring-2 focus:ring-unt-green focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+          >
+            Add Attendance
+          </button>
         </div>
 
         {/* Attendance snapshot */}
@@ -695,7 +751,7 @@ const TeacherClassView = () => {
             <p className="text-sm text-gray-500 dark:text-slate-400">No attendance records found for this class yet.</p>
           ) : (
             <ul className="space-y-4">
-              {attendanceRecords.map((record) => (
+              {filteredRecords.map((record) => (
                 <li
                   key={record.id}
                   className="grid grid-cols-[2fr,auto,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
