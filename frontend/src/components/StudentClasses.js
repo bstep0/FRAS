@@ -59,6 +59,7 @@ const StudentClasses = () => {
               }
 
               const classData = classSnap.data();
+              const classCode = classData.classId || classSnap.id;
               let teacherName = "";
               const teacherId = classData.teacher;
 
@@ -80,6 +81,7 @@ const StudentClasses = () => {
 
               return {
                 id: classSnap.id,
+                code: classCode,
                 name: classData.name,
                 teacher: teacherName,
                 room: classData.room,
@@ -137,7 +139,7 @@ const StudentClasses = () => {
               >
                 <div className="space-y-1">
                   <p className="text-base font-semibold text-slate-900 dark:text-white">
-                    {classItem.id} - {classItem.name}
+                    {(classItem.code || classItem.id) + " - " + classItem.name}
                   </p>
                   <p>Teacher: {classItem.teacher || "TBD"}</p>
                   <p>Room: {classItem.room || "TBD"}</p>
