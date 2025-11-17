@@ -20,29 +20,29 @@ const ClassAttendanceChart = ({ attendanceSummary }) => {
     [statusEntries]
   );
 
-  const [isDark, setIsDark] = useState(() =>
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("dark")
+  const [isDark, setIsDark] = useState(
+    () => supportsDOM && document.documentElement.classList.contains("dark")
   );
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
+    if (!supportsObserver) return undefined;
+
     const html = document.documentElement;
 
     const update = () => setIsDark(html.classList.contains("dark"));
     update();
 
-
     const observer = new MutationObserver(update);
     observer.observe(html, { attributes: true, attributeFilter: ["class"] });
 
     return () => observer.disconnect();
-  }, []);
-
+  }, [supportsObserver]);
 
   useEffect(() => {
+    if (!supportsDOM) return;
+
     if (isDark) {
-      ChartJS.defaults.color = "#FFFFFF"; 
+      ChartJS.defaults.color = "#FFFFFF";
       ChartJS.defaults.plugins.legend.labels.color = "#FFFFFF";
       ChartJS.defaults.plugins.tooltip.titleColor = "#FFFFFF";
       ChartJS.defaults.plugins.tooltip.bodyColor = "#FFFFFF";
@@ -56,7 +56,7 @@ const ClassAttendanceChart = ({ attendanceSummary }) => {
       ChartJS.defaults.plugins.tooltip.backgroundColor = "#FFFFFF";
       ChartJS.defaults.plugins.tooltip.borderColor = "#CBD5E1";
     }
-  }, [isDark]);
+  }, [isDark, supportsDOM]);
 
   const data = useMemo(
     () => ({

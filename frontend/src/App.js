@@ -10,6 +10,7 @@ import StudentMessages from "./components/StudentMessages";
 import LoginPage from "./components/LoginPage";
 import TeacherClasses from "./components/TeacherClasses";
 import TeacherClassView from "./components/TeacherClassView";
+import TeacherStudentAttendance from "./components/TeacherStudentAttendance";
 import StudentClassView from "./components/StudentClassView";
 import NotificationsPage from "./components/notifications/NotificationsPage";
 import { NotificationsProvider } from "./context/NotificationsContext";
@@ -32,6 +33,10 @@ function App() {
           <Route path="/teacher" element={<TeacherDashboard />} />
           <Route path="/teacher/classes" element={<TeacherClasses />} />
           <Route path="/teacher/classes/:className" element={<TeacherClassView />} />
+          <Route
+            path="/teacher/classes/:className/students/:studentId"
+            element={<TeacherStudentAttendance />}
+          />
           <Route path="/teacher/notifications" element={<NotificationsPage title="Notifications" />} />
 
           {/* Student Routes */}
