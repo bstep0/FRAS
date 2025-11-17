@@ -63,6 +63,7 @@ const StudentDashboard = () => {
                 return null;
               }
               const classData = classSnap.data();
+              const classCode = classData.classId || classSnap.id;
 
               let teacherName = "";
               const teacherId = classData.teacher;
@@ -84,6 +85,7 @@ const StudentDashboard = () => {
 
               return {
                 id: classSnap.id,
+                code: classCode,
                 name: classData.name,
                 teacher: teacherName,
                 room: classData.room,
@@ -162,7 +164,7 @@ const StudentDashboard = () => {
                   <option value="">Select A Class</option>
                   {classes.map((cls) => (
                     <option key={cls.id} value={cls.id}>
-                      {cls.id} · {cls.name}
+                      {(cls.code || cls.id) + " · " + cls.name}
                     </option>
                   ))}
                 </select>
@@ -198,7 +200,7 @@ const StudentDashboard = () => {
                 >
                   <div className="space-y-1">
                     <p className="text-base font-semibold text-slate-900 dark:text-white">
-                      {classItem.id} · {classItem.name}
+                      {(classItem.code || classItem.id) + " · " + classItem.name}
                     </p>
                     <p className="text-sm">Instructor: {classItem.teacher || "TBD"}</p>
                     <p className="text-sm">Room: {classItem.room || "TBD"}</p>

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  addDoc,
   arrayRemove,
   arrayUnion,
   collection,
@@ -8,6 +7,7 @@ import {
   doc,
   getDocs,
   query,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -16,6 +16,7 @@ import { db } from "../firebaseConfig";
 import { useNotifications } from "../context/NotificationsContext";
 
 const defaultClassState = {
+  classId: "",
   name: "",
   room: "",
   schedule: "",
@@ -69,6 +70,7 @@ const AdminClasses = () => {
         const data = docSnapshot.data();
         return {
           id: docSnapshot.id,
+          classId: data.classId || docSnapshot.id,
           name: data.name || data.title || "Untitled Class",
           room: data.room || "",
           schedule: data.schedule || "",
@@ -107,6 +109,7 @@ const AdminClasses = () => {
 
   const openEditModal = (classItem) => {
     setFormState({
+      classId: classItem.classId || classItem.id || "",
       name: classItem.name || "",
       room: classItem.room || "",
       schedule: classItem.schedule || "",
@@ -143,6 +146,17 @@ const AdminClasses = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    const trimmedClassId = formState.classId.trim();
+
+    if (!trimmedClassId) {
+      pushToast({
+        tone: "warning",
+        title: "Missing class ID",
+        message: "Please provide a unique class ID before saving.",
+      });
+      return;
+    }
+
     if (!formState.name.trim()) {
       pushToast({
         tone: "warning",
@@ -155,6 +169,7 @@ const AdminClasses = () => {
     setIsSaving(true);
     try {
       const payload = {
+        classId: trimmedClassId,
         name: formState.name.trim(),
         room: formState.room.trim(),
         schedule: formState.schedule.trim(),
@@ -162,14 +177,23 @@ const AdminClasses = () => {
       };
 
       if (editingClassId) {
+        if (trimmedClassId !== editingClassId) {
+          pushToast({
+            tone: "warning",
+            title: "Class ID locked",
+            message: "The class ID cannot be changed once created.",
+          });
+          return;
+        }
         const classRef = doc(db, "classes", editingClassId);
         const existing = classes.find((classItem) => classItem.id === editingClassId);
         await updateDoc(classRef, payload);
         await syncTeacherAssignments(editingClassId, payload.teacher, existing?.teacher || "");
         pushToast({ tone: "success", title: "Class updated", message: "Changes saved successfully." });
       } else {
-        const classRef = await addDoc(collection(db, "classes"), payload);
-        await syncTeacherAssignments(classRef.id, payload.teacher, "");
+        const classRef = doc(db, "classes", trimmedClassId);
+        await setDoc(classRef, payload);
+        await syncTeacherAssignments(trimmedClassId, payload.teacher, "");
         pushToast({ tone: "success", title: "Class created", message: "The class was added successfully." });
       }
 
@@ -256,7 +280,9 @@ const AdminClasses = () => {
                   className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="space-y-1">
-                    <p className="text-base font-semibold text-slate-900 dark:text-white">{classItem.name}</p>
+                    <p className="text-base font-semibold text-slate-900 dark:text-white">
+                      {classItem.classId || classItem.id} · {classItem.name}
+                    </p>
                     <p className="text-sm text-slate-600 dark:text-slate-300">
                       {classItem.room ? `Room: ${classItem.room}` : "Room not set"}
                     </p>
@@ -309,6 +335,18 @@ const AdminClasses = () => {
 
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
               <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Class ID</label>
+                  <input
+                    type="text"
+                    value={formState.classId}
+                    onChange={(event) => handleInputChange("classId", event.target.value)}
+                    required
+                    disabled={Boolean(editingClassId)}
+                    className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white/90 px-4 py-2 text-sm text-slate-900 shadow-sm transition focus:border-unt-green focus:outline-none focus:ring-2 focus:ring-unt-green/30 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-white dark:disabled:bg-slate-800"
+                    placeholder="e.g., CS101"
+                  />
+                </div>
                 <div>
                   <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Class Name</label>
                   <input

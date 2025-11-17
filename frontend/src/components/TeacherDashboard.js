@@ -94,6 +94,7 @@ const TeacherDashboard = () => {
         const normalizedClasses = fetchedClasses
           .filter(Boolean)
           .map((classData) => {
+            const classCode = classData.classId || classData.id;
             const studentList =
               classData.students ||
               classData.studentIds ||
@@ -105,6 +106,7 @@ const TeacherDashboard = () => {
 
             return {
               id: classData.id,
+              code: classCode,
               name: classData.name || classData.title || "Untitled class",
               room: classData.room || classData.location || "",
               schedule: classData.schedule || classData.time || "",
@@ -186,7 +188,9 @@ const TeacherDashboard = () => {
                   className="flex flex-col gap-3 rounded-2xl border border-unt-green/10 bg-white/90 p-5 text-sm text-slate-700 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-slate-200 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="space-y-1">
-                    <p className="text-base font-semibold text-slate-900 dark:text-white">{classItem.name}</p>
+                    <p className="text-base font-semibold text-slate-900 dark:text-white">
+                      {(classItem.code || classItem.id) + " · " + classItem.name}
+                    </p>
                     <p className="text-sm">Room: {classItem.room || "TBD"}</p>
                     <p className="text-sm">Schedule: {classItem.schedule || "See syllabus"}</p>
                     <p className="text-sm">Students Enrolled: {classItem.studentCount}</p>
