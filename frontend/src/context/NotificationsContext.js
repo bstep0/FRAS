@@ -143,6 +143,7 @@ export const NotificationsProvider = ({ children }) => {
   const [dismissedToastIds, setDismissedToastIds] = useState([]);
   const [toastQueue, setToastQueue] = useState([]);
 
+  const lastUserIdRef = useRef(currentUser?.uid || null);
   const aggregatedSnapshotsRef = useRef(new Map());
 
   useEffect(() => {
@@ -151,6 +152,19 @@ export const NotificationsProvider = ({ children }) => {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const currentId = currentUser?.uid || null;
+    if (lastUserIdRef.current === currentId) return;
+
+    setNotifications([]);
+    setDismissedBannerIds([]);
+    setDismissedToastIds([]);
+    setToastQueue([]);
+    setLoading(true);
+    aggregatedSnapshotsRef.current = new Map();
+    lastUserIdRef.current = currentId;
+  }, [currentUser]);
 
   useEffect(() => {
     let isCancelled = false;
