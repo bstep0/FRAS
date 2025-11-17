@@ -201,13 +201,6 @@ const TeacherDashboard = () => {
             )}
           </div>
         </section>
-
-        <section className="glass-card text-sm text-slate-600 dark:text-slate-300">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Recent Attendance Updates</h2>
-          <p className="mt-2">
-            Attendance activity from your classes will appear here as soon as students begin checking in.
-          </p>
-        </section>
       </div>
     </TeacherLayout>
   );
