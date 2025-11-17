@@ -75,8 +75,24 @@ const formatRecordDate = (value) => {
   return parsed ? formatDateLabel(parsed) : "";
 };
 
+const formatNameFromEmail = (email) => {
+  if (typeof email !== "string") return "";
+
+  const [localPart] = email.split("@");
+  if (!localPart) return "";
+
+  return localPart
+    .split(/[._]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+    .trim();
+};
+
 const resolveStudentName = (studentData, fallbackName, fallbackId) => {
-  if (studentData) {
+  const preferredName = (() => {
+    if (!studentData) return null;
+
     const { displayName, fullName, name, firstName, lastName, email } = studentData;
 
     if (displayName) return displayName;
@@ -85,10 +101,19 @@ const resolveStudentName = (studentData, fallbackName, fallbackId) => {
 
     const combined = [firstName, lastName].filter(Boolean).join(" ").trim();
     if (combined) return combined;
-    if (email) return email;
-  }
 
-  if (fallbackName) return fallbackName;
+    const emailName = formatNameFromEmail(email);
+    if (emailName) return emailName;
+
+    return null;
+  })();
+
+  if (preferredName) return preferredName;
+
+  if (fallbackName) {
+    const formattedFallback = formatNameFromEmail(fallbackName) || fallbackName;
+    if (formattedFallback.trim()) return formattedFallback;
+  }
   if (fallbackId) return fallbackId;
 
   return "Unknown Student";
@@ -110,6 +135,7 @@ const TeacherClassView = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportFeedback, setExportFeedback] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const { pushToast } = useNotifications();
 
   const fetchAttendanceRecords = useCallback(async () => {
@@ -146,9 +172,13 @@ const TeacherClassView = () => {
             const studentRef = doc(db, "users", studentId);
             const studentSnapshot = await getDoc(studentRef);
             if (studentSnapshot.exists()) {
+              const studentData = studentSnapshot.data();
+              const studentName = resolveStudentName(studentData, null, studentSnapshot.id);
+
               studentMap.set(studentId, {
                 id: studentSnapshot.id,
-                ...studentSnapshot.data(),
+                ...studentData,
+                name: studentName,
               });
             } else {
               studentMap.set(studentId, null);
@@ -168,11 +198,19 @@ const TeacherClassView = () => {
           record.studentID
         );
 
+        const studentWithName = studentData
+          ? studentData.name
+            ? studentData
+            : { ...studentData, name: studentName }
+          : record.studentID
+            ? { id: record.studentID, name: studentName }
+            : null;
+
         const dateValue = coerceToDate(record.date);
 
         return {
           ...record,
-          student: studentData,
+          student: studentWithName,
           studentName,
           dateValue,
           formattedDate: dateValue ? formatDateLabel(dateValue) : "",
@@ -455,6 +493,16 @@ const TeacherClassView = () => {
   const displayStatus = (status) =>
     status === "Present" || status === "Absent" ? status : status || "Unknown";
 
+  const filteredRecords = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    if (!term) return attendanceRecords;
+
+    return attendanceRecords.filter((record) =>
+      (record.studentName || "").toLowerCase().includes(term)
+    );
+  }, [attendanceRecords, searchTerm]);
+
   return (
     <TeacherLayout title={classId ? `${classId} Overview` : "Class Overview"}>
       <div className="space-y-6 text-gray-900 dark:text-slate-100">
@@ -483,13 +531,17 @@ const TeacherClassView = () => {
         <section className="rounded-lg bg-white p-6 shadow-sm transition hover:border-unt-green/30 hover:shadow-brand dark:border-slate-700 dark:bg-slate-900">
           <h2 className="mb-4 text-2xl font-semibold">Student List</h2>
 
-          {/* Search (non-functional placeholder for now) */}
-          <input
-            type="text"
-            placeholder="Search student name"
-            className="mb-4 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
-            aria-label="Search student"
-          />
+          <label className="block">
+            <span className="sr-only">Search student</span>
+            <input
+              type="text"
+              placeholder="Search student name"
+              className="mb-4 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
+              aria-label="Search student"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
 
           {isLoading ? (
             <p className="text-sm text-gray-500 dark:text-slate-400">Loading attendance records…</p>
@@ -497,9 +549,13 @@ const TeacherClassView = () => {
             <p className="text-sm text-gray-500 dark:text-slate-400">
               No attendance records found for this class yet.
             </p>
+          ) : filteredRecords.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              No students match your search.
+            </p>
           ) : (
             <ul className="space-y-4">
-              {attendanceRecords.map((record) => (
+              {filteredRecords.map((record) => (
                 <li
                   key={record.id}
                   className="grid grid-cols-[2fr,auto,auto] items-center gap-4 rounded-lg bg-gray-100 p-4 shadow dark:bg-slate-800"
