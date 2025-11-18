@@ -169,7 +169,7 @@ def get_attendance_status(now_dt, start_dt, end_dt):
     if now_dt <= present_cutoff:
         return "Present", None
     else:
-        return "Late", None
+        return "Absent", None
 
 
 def _resolve_record_id(payload):
@@ -502,7 +502,7 @@ def finalize_attendance():
     if pending_status is None:
         pending_status = record.get("pendingStatus")
 
-    if pending_status not in {"Present", "Late"}:
+    if pending_status not in {"Present", "Absent"}:
         return jsonify({
             "status": "error",
             "message": "Pending attendance record is invalid."
