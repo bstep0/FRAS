@@ -6,16 +6,6 @@ import {
   PENDING_VERIFICATION_MINUTES,
 } from "../config/api";
 
-const formatDurationLabel = (minutes) => {
-  if (minutes < 1) {
-    const seconds = Math.round(minutes * 60);
-    if (seconds <= 1) return "1 second";
-    return `${seconds} seconds`;
-  }
-  if (minutes === 1) return "1 minute";
-  return `${minutes} minutes`;
-};
-
 const FaceScanner = ({ selectedClass, studentId }) => {
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -190,14 +180,6 @@ const FaceScanner = ({ selectedClass, studentId }) => {
       setIsPending(true);
       setCaptureDisabled(true);
       stopVideo();
-
-      const durationLabel = formatDurationLabel(PENDING_VERIFICATION_MINUTES);
-
-      setNotification({
-        type: "info",
-        message: `Verification is pending. Keep this page open and stay connected to EagleNet for ${durationLabel}.`,
-      });
-
       const totalSeconds = PENDING_VERIFICATION_MINUTES * 60;
       setRemainingSeconds(totalSeconds);
 
@@ -257,6 +239,7 @@ const FaceScanner = ({ selectedClass, studentId }) => {
       });
 
       const result = await response.json();
+      const recordId = result.recordId || result.record_id;
 
       if (!isMountedRef.current) return;
 
@@ -283,9 +266,9 @@ const FaceScanner = ({ selectedClass, studentId }) => {
         navigationTimeoutRef.current = setTimeout(() => {
           navigate(`/student/classes/${selectedClass}`, { replace: true });
         }, 2000);
-      } else if (result.status === "pending" && result.recordId) {
-        beginPendingFlow(result.recordId);
-      } else if (result.status === "pending" && !result.recordId) {
+      } else if (result.status === "pending" && recordId) {
+        beginPendingFlow(recordId);
+      } else if (result.status === "pending" && !recordId) {
         // Safety net: pending without recordId should not normally happen
         setNotification({
           type: "error",
@@ -334,8 +317,6 @@ const FaceScanner = ({ selectedClass, studentId }) => {
     warning: "bg-yellow-100 text-yellow-800 border border-yellow-300",
     info: "bg-blue-100 text-blue-800 border border-blue-200",
   };
-
-  const durationLabel = formatDurationLabel(PENDING_VERIFICATION_MINUTES);
 
   return (
     <div className="space-y-4">
@@ -406,18 +387,50 @@ const FaceScanner = ({ selectedClass, studentId }) => {
       )}
 
       {isPending && (
-        <div className="p-4 rounded bg-yellow-50 border border-yellow-200">
-          <p className="font-semibold text-yellow-900">
-            Stay on EagleNet and keep this page open for the next {durationLabel}.
-          </p>
-          <p className="text-sm text-yellow-800 mt-2">
-            We'll automatically finalize your attendance when the timer ends.
-          </p>
-          {remainingSeconds !== null && (
-            <p className="mt-3 font-mono text-yellow-900" data-testid="pending-countdown">
-              Time remaining: {formatRemainingTime()}
-            </p>
-          )}
+        <div
+          className="rounded-xl border border-yellow-200 bg-yellow-50/80 p-4 shadow-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-start gap-3">
+            <div className="mt-1 text-yellow-600" aria-hidden="true">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="h-5 w-5"
+              >
+                <path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h16.78A1.5 1.5 0 0 0 21.18 18L12.71 3.86a1.5 1.5 0 0 0-2.42 0ZM12 9a1 1 0 0 1 .99 1.13l-.37 3a1 1 0 0 1-1.24.85A1 1 0 0 1 10.1 13l.37-3A1 1 0 0 1 12 9Zm1.25 7a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Z" />
+              </svg>
+            </div>
+
+            <div className="flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold uppercase tracking-wide text-yellow-800">
+                  Verification pending
+                </p>
+                {remainingSeconds !== null && (
+                  <span
+                    data-testid="pending-countdown"
+                    className="inline-flex items-center gap-2 rounded-full border border-yellow-300 bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-900"
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full bg-yellow-500 animate-pulse"
+                      aria-hidden="true"
+                    />
+                    Auto-finalizing in {formatRemainingTime()}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-sm font-semibold text-yellow-900">
+                Stay on EagleNet and keep this page open while we verify your attendance.
+              </p>
+              <p className="text-sm text-yellow-800">
+                We'll finalize automatically as soon as the timer ends—please avoid closing this tab or switching networks.
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>
