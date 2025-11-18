@@ -145,6 +145,7 @@ export const NotificationsProvider = ({ children }) => {
 
   const lastUserIdRef = useRef(currentUser?.uid || null);
   const aggregatedSnapshotsRef = useRef(new Map());
+  const migratedNotificationIdsRef = useRef(new Set());
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -239,6 +240,101 @@ export const NotificationsProvider = ({ children }) => {
     return Array.from(values).filter(Boolean);
   }, [currentUser, userRole]);
 
+  const targetIdentifiers = useMemo(() => {
+    const identifiers = new Set();
+    if (currentUser?.uid) {
+      identifiers.add(currentUser.uid);
+    }
+    if (currentUser?.email) {
+      identifiers.add(currentUser.email);
+    }
+    if (userDocId) {
+      identifiers.add(userDocId);
+    }
+    return Array.from(identifiers).filter(Boolean);
+  }, [currentUser, userDocId]);
+
+  useEffect(() => {
+    migratedNotificationIdsRef.current = new Set();
+  }, [currentUser]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const notificationsRef = collection(db, "notifications");
+
+    const backfillTargets = async () => {
+      if (!currentUser) return;
+
+      const legacyQueries = [];
+      const generalAudiences = audienceValues.slice(0, 10);
+
+      if (currentUser.uid) {
+        legacyQueries.push(query(notificationsRef, where("userId", "==", currentUser.uid)));
+      }
+      if (userDocId) {
+        legacyQueries.push(query(notificationsRef, where("userDocId", "==", userDocId)));
+      }
+      if (currentUser.email) {
+        legacyQueries.push(query(notificationsRef, where("userEmail", "==", currentUser.email)));
+      }
+      if (generalAudiences.length) {
+        legacyQueries.push(
+          query(notificationsRef, where("audience", "in", generalAudiences))
+        );
+        legacyQueries.push(
+          query(notificationsRef, where("audiences", "array-contains-any", generalAudiences))
+        );
+      }
+
+      for (const legacyQuery of legacyQueries) {
+        try {
+          const legacySnapshot = await getDocs(legacyQuery);
+          for (const docSnapshot of legacySnapshot.docs) {
+            if (isCancelled) return;
+            if (migratedNotificationIdsRef.current.has(docSnapshot.id)) {
+              continue;
+            }
+
+            const data = docSnapshot.data() || {};
+            const existingTargets = Array.isArray(data.targets)
+              ? data.targets.filter(Boolean)
+              : [];
+
+            const mergedTargets = new Set(
+              [
+                ...existingTargets,
+                ...targetIdentifiers,
+                data.userId,
+                data.userEmail,
+                data.userDocId,
+              ].filter(Boolean)
+            );
+
+            const mergedTargetsArray = Array.from(mergedTargets);
+            const needsUpdate =
+              mergedTargetsArray.length > 0 &&
+              (existingTargets.length !== mergedTargetsArray.length ||
+                existingTargets.some((target) => !mergedTargets.has(target)));
+
+            if (needsUpdate) {
+              await updateDoc(docSnapshot.ref, { targets: mergedTargetsArray });
+            }
+
+            migratedNotificationIdsRef.current.add(docSnapshot.id);
+          }
+        } catch (error) {
+          console.error("Failed to backfill notification targets", error);
+        }
+      }
+    };
+
+    backfillTargets();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [audienceValues, currentUser, targetIdentifiers, userDocId]);
+
   useEffect(() => {
     const notificationsRef = collection(db, "notifications");
     const unsubscribers = [];
@@ -283,29 +379,11 @@ export const NotificationsProvider = ({ children }) => {
       }
     };
 
-    const generalAudiences = audienceValues.slice(0, 10);
-    if (generalAudiences.length) {
-      subscribeToConstraints(where("audience", "in", generalAudiences));
-      subscribeToConstraints(where("audiences", "array-contains-any", generalAudiences));
-    }
-
-    if (currentUser) {
-      const idCandidates = Array.from(
-        new Set([
-          userDocId,
-          currentUser?.uid || null,
-        ].filter(Boolean))
+    const targetQueries = targetIdentifiers.slice(0, 10);
+    if (targetQueries.length) {
+      subscribeToConstraints(
+        where("targets", "array-contains-any", targetQueries)
       );
-
-      if (idCandidates.length > 0) {
-        subscribeToConstraints(
-          where("userId", "in", idCandidates.slice(0, 10))
-        );
-      }
-
-      if (currentUser.email) {
-        subscribeToConstraints(where("userEmail", "==", currentUser.email));
-      }
     }
 
     if (!hasSubscription) {
@@ -319,7 +397,7 @@ export const NotificationsProvider = ({ children }) => {
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-  }, [currentUser, userDocId, audienceValues]);
+  }, [currentUser, targetIdentifiers]);
 
   const markAsRead = useCallback(
     async (notificationId) => {
@@ -391,6 +469,9 @@ export const NotificationsProvider = ({ children }) => {
       if (userRole) {
         notificationPayload.targetRole = userRole;
       }
+
+      const targets = new Set([notificationPayload.userId, notificationPayload.userEmail]);
+      notificationPayload.targets = Array.from(targets).filter(Boolean);
 
       const notificationRef = collection(db, "notifications");
       const docRef = await addDoc(notificationRef, notificationPayload);

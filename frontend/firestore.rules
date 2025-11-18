@@ -6,10 +6,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Assume request.auth.token.role is already stored as lowercase: "admin", "teacher", "student"
     function authRole() {
       return request.auth != null && request.auth.token.role is string
-        ? request.auth.token.role
+        ? lower(request.auth.token.role)
         : null;
     }
 
@@ -29,33 +28,39 @@ service cloud.firestore {
       return isSignedIn() && (isAdmin() || isTeacher());
     }
 
-    // Simple email comparison; assumes request.auth.token.email matches the stored email exactly
+    function lowerAuthEmail() {
+      return request.auth != null && request.auth.token.email != null
+        ? lower(request.auth.token.email)
+        : null;
+    }
+
+    // Compare email case-insensitively to reduce login friction
     function requestEmailMatches(resourceData) {
-      return request.auth != null
-        && resourceData.email is string
-        && request.auth.token.email is string
-        && resourceData.email == request.auth.token.email;
+      return request.auth != null && resourceData.email is string && request.auth.token.email is string
+        && lower(resourceData.email) == lowerAuthEmail();
     }
 
     function hasNotificationAccess(resourceData) {
       let targets = resourceData.targets;
       return targets is list && (
         (request.auth != null && request.auth.uid in targets) ||
-        (request.auth != null && request.auth.token.email is string && request.auth.token.email in targets)
+        (request.auth != null && request.auth.token.email is string && request.auth.token.email in targets) ||
+        (lowerAuthEmail() != null && lowerAuthEmail() in targets)
       );
     }
 
     function hasUserIdForRole(userId, role) {
-      return (role == 'admin' && userId.matches('^A[0-9]+$'))
-        || (role == 'teacher' && userId.matches('^T[0-9]+$'))
-        || (role == 'student' && userId.matches('^S[0-9]+$'));
+      let normalizedRole = role is string ? lower(role) : role;
+      return (normalizedRole == 'admin' && userId.matches('^A[0-9]+$'))
+        || (normalizedRole == 'teacher' && userId.matches('^T[0-9]+$'))
+        || (normalizedRole == 'student' && userId.matches('^S[0-9]+$'));
     }
 
     match /users/{userId} {
       // Staff can get/list; students can get/list only their own record (by email)
       allow get, list: if staffCanAccess() || (isStudent() && requestEmailMatches(resource.data));
 
-      // Creating users is limited to staff; we assume the role field is already lowercase
+      // Creating users is limited to staff; normalize role before validation
       allow create: if staffCanAccess()
         && request.resource.data.role is string
         && hasUserIdForRole(userId, request.resource.data.role);
@@ -95,4 +100,29 @@ service cloud.firestore {
       allow update: if isSignedIn() && hasNotificationAccess(resource.data)
         && request.resource.data.userId == resource.data.userId
         && request.resource.data.type == resource.data.type
-        &&
+        && request.resource.data.channel == resource.data.channel
+        && request.resource.data.surfaceTargets == resource.data.surfaceTargets
+        && request.resource.data.dedupeKey == resource.data.dedupeKey
+        && request.resource.data.targets == resource.data.targets
+        && request.resource.data.payload == resource.data.payload
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.message == resource.data.message
+        && request.resource.data.tone == resource.data.tone
+        && request.resource.data.actionLabel == resource.data.actionLabel
+        && request.resource.data.actionHref == resource.data.actionHref
+        && request.resource.data.toast == resource.data.toast
+        && request.resource.data.banner == resource.data.banner
+        && request.resource.data.userEmail == resource.data.userEmail
+        && request.resource.data.read is bool
+        && request.resource.data.updatedAt is timestamp
+        && (!('dismissedSurfaces' in request.resource.data) || request.resource.data.dismissedSurfaces is map)
+        && (!('acknowledgedAt' in request.resource.data) || request.resource.data.acknowledgedAt is timestamp);
+
+      allow create, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
