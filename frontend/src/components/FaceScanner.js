@@ -6,6 +6,16 @@ import {
   PENDING_VERIFICATION_MINUTES,
 } from "../config/api";
 
+const formatDurationLabel = (minutes) => {
+  if (minutes < 1) {
+    const seconds = Math.round(minutes * 60);
+    if (seconds <= 1) return "1 second";
+    return `${seconds} seconds`;
+  }
+  if (minutes === 1) return "1 minute";
+  return `${minutes} minutes`;
+};
+
 const FaceScanner = ({ selectedClass, studentId }) => {
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -193,10 +203,11 @@ const FaceScanner = ({ selectedClass, studentId }) => {
       setCaptureDisabled(true);
       stopVideo();
 
+      const durationLabel = formatDurationLabel(PENDING_VERIFICATION_MINUTES);
+
       setNotification({
         type: "info",
-        message:
-          "Verification is pending. Keep this page open and stay connected to EagleNet for 45 minutes.",
+        message: `Verification is pending. Keep this page open and stay connected to EagleNet for ${durationLabel}.`,
       });
 
       const totalSeconds = PENDING_VERIFICATION_MINUTES * 60;
@@ -336,6 +347,8 @@ const FaceScanner = ({ selectedClass, studentId }) => {
     info: "bg-blue-100 text-blue-800 border border-blue-200",
   };
 
+  const durationLabel = formatDurationLabel(PENDING_VERIFICATION_MINUTES);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col items-center">
@@ -403,7 +416,7 @@ const FaceScanner = ({ selectedClass, studentId }) => {
       {isPending && (
         <div className="p-4 rounded bg-yellow-50 border border-yellow-200">
           <p className="font-semibold text-yellow-900">
-            Stay on EagleNet and keep this page open for the next 45 minutes.
+            Stay on EagleNet and keep this page open for the next {durationLabel}.
           </p>
           <p className="text-sm text-yellow-800 mt-2">
             We'll automatically finalize your attendance when the timer ends.

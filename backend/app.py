@@ -45,6 +45,10 @@ bucket = storage.bucket()  # Initialize storage bucket
 # Timezone for Central Time
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
+# How long pending records should wait before recheck (for logging & UI)
+# You can change this for testing, or set env var PENDING_VERIFICATION_MINUTES.
+PENDING_RECHECK_MINUTES = int(os.environ.get("PENDING_VERIFICATION_MINUTES", "45"))
+
 
 def _to_central_iso(timestamp_like):
     """Return an ISO 8601 string in Central time for datetime inputs."""
@@ -696,7 +700,7 @@ def _process_face_recognition_request():
             "requestId": request.headers.get("X-Request-Id"),
         }
 
-        pending_recheck_at = now_central + datetime.timedelta(minutes=45)
+        pending_recheck_at = now_central + datetime.timedelta(minutes=PENDING_RECHECK_MINUTES)
 
         # Create attendance record document in Firebase marked as pending review
         attendance_record = {
