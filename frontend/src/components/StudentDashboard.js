@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { Link } from "react-router-dom";
 import { auth, db } from "../firebaseConfig";
@@ -15,6 +15,7 @@ const StudentDashboard = () => {
   const { pushToast } = useNotifications();
 
   const user = auth.currentUser;
+  const teacherProfileCache = useRef(new Map());
 
   useEffect(() => {
     let isMounted = true;
@@ -54,6 +55,41 @@ const StudentDashboard = () => {
           return;
         }
 
+        const resolveTeacherName = async (teacherId) => {
+          if (teacherProfileCache.current.has(teacherId)) {
+            return teacherProfileCache.current.get(teacherId);
+          }
+
+          const fetchPromise = (async () => {
+            try {
+              const teacherRef = doc(db, "users", teacherId);
+              const teacherSnap = await getDoc(teacherRef);
+
+              if (!teacherSnap.exists()) {
+                return "";
+              }
+
+              const teacherData = teacherSnap.data();
+              const resolvedName =
+                [teacherData.fname, teacherData.lname].filter(Boolean).join(" ") ||
+                teacherData.displayName ||
+                teacherData.name ||
+                teacherData.email ||
+                "";
+
+              return resolvedName.trim();
+            } catch (error) {
+              console.error(`Failed to fetch teacher profile ${teacherId}`, error);
+              return "";
+            }
+          })();
+
+          teacherProfileCache.current.set(teacherId, fetchPromise);
+          const resolvedName = await fetchPromise;
+          teacherProfileCache.current.set(teacherId, resolvedName);
+          return resolvedName;
+        };
+
         const fetchedClasses = await Promise.all(
           enrolledClassIds.map(async (classId) => {
             try {
@@ -62,17 +98,21 @@ const StudentDashboard = () => {
               if (!classSnap.exists()) {
                 return null;
               }
+
               const classData = classSnap.data();
               const classCode = classData.classId || classSnap.id;
 
+              const teacherId = (classData.teacher || "").trim();
               const teacherName =
-                (classData.teacherName || classData.teacherDisplayName || classData.teacher || "").trim();
+                (classData.teacherName || classData.teacherDisplayName || "").trim() ||
+                (teacherId ? await resolveTeacherName(teacherId) : "");
 
               return {
                 id: classSnap.id,
                 code: classCode,
                 name: classData.name,
                 teacher: teacherName,
+                teacherId,
                 room: classData.room,
                 schedule: classData.schedule,
               };
@@ -117,7 +157,9 @@ const StudentDashboard = () => {
       <div className="space-y-8">
         <section className="glass-card">
           <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Attendance History</h2>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Review your attendance records for each course.</p>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+            Review your attendance records for each course.
+          </p>
           <div className="mt-6">
             <Link to="/student/classes" className="brand-button">
               View History
@@ -127,7 +169,9 @@ const StudentDashboard = () => {
 
         <section className="glass-card">
           <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Record Attendance</h2>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Scan your face to mark your attendance for a class.</p>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+            Scan your face to mark your attendance for a class.
+          </p>
           <div className="mt-6 flex flex-col gap-5">
             <button
               type="button"
@@ -140,7 +184,9 @@ const StudentDashboard = () => {
             {showScanFlow ? (
               <div className="rounded-2xl border border-unt-green/10 bg-white/90 p-5 shadow-inner dark:border-slate-700/60 dark:bg-slate-900/70">
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Select Class</h3>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Choose the class you want to check in for and begin scanning.</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                  Choose the class you want to check in for and begin scanning.
+                </p>
                 <select
                   value={selectedClass}
                   onChange={(event) => setSelectedClass(event.target.value)}
@@ -168,7 +214,9 @@ const StudentDashboard = () => {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">My Classes</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-300">Quick access to the courses you are enrolled in this term.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-300">
+                Quick access to the courses you are enrolled in this term.
+              </p>
             </div>
             <Link to="/student/classes" className="brand-button--ghost">
               View All

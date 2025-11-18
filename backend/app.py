@@ -160,16 +160,14 @@ def get_attendance_status(now_dt, start_dt, end_dt):
     # Students can start scanning their attendance 5 minutes before class starts
     allowed_start = start_dt - datetime.timedelta(minutes=5)
     # Up to 15 minutes after class start is considered present
-    present_cutoff = start_dt + datetime.timedelta(minutes=15)
+   #present_cutoff = start_dt + datetime.timedelta(minutes=15)
     
     if now_dt < allowed_start:
         return None, "Attendance cannot be recorded before the allowed time."
     if now_dt > end_dt:
         return None, "Attendance cannot be recorded after the allowed time."
-    if now_dt <= present_cutoff:
-        return "Present", None
-    else:
-        return "Absent", None
+    
+    return "Present", None
 
 
 def _resolve_record_id(payload):
