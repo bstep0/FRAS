@@ -10,7 +10,7 @@ import type {
   StudentInfo,
 } from "./types";
 
-const DEFAULT_LOOKAHEAD_MINUTES = 5;
+const DEFAULT_LOOKAHEAD_MINUTES = 10;
 
 export interface ClassReminderOverrides {
   now?: DateTime;
@@ -84,10 +84,10 @@ export const processClassReminders = async (
             return;
           }
 
-          const message =
-            roundedMinutes === 0
-              ? `${className} is starting now. Head to class!`
-              : `${className} begins at ${startTimeText}. That's in ${roundedMinutes} minute${roundedMinutes === 1 ? "" : "s"}.`;
+      const message =
+        roundedMinutes === 0
+          ? `${className} is starting now. Please record your attendance.`
+          : `${className} begins at ${startTimeText}. That's in ${roundedMinutes} minute${roundedMinutes === 1 ? "" : "s"}. Tap to check in early.`;
 
           await writer({
             userId: student.id,
