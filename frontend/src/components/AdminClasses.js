@@ -21,6 +21,7 @@ const defaultClassState = {
   room: "",
   schedule: "",
   teacher: "",
+  teacherName: "",
 };
 
 const AdminClasses = () => {
@@ -62,12 +63,13 @@ const AdminClasses = () => {
       ]);
 
       const teacherLookup = teacherList.reduce((acc, teacher) => {
-        acc[teacher.id] = teacher;
+        acc[teacher.id] = teacher.name;
         return acc;
       }, {});
 
       const normalized = classSnapshot.docs.map((docSnapshot) => {
         const data = docSnapshot.data();
+        const teacherName = data.teacherName || teacherLookup[data.teacher] || "";
         return {
           id: docSnapshot.id,
           classId: data.classId || docSnapshot.id,
@@ -75,6 +77,7 @@ const AdminClasses = () => {
           room: data.room || "",
           schedule: data.schedule || "",
           teacher: data.teacher || "",
+          teacherName,
         };
       });
 
@@ -114,6 +117,7 @@ const AdminClasses = () => {
       room: classItem.room || "",
       schedule: classItem.schedule || "",
       teacher: classItem.teacher || "",
+      teacherName: classItem.teacherName || "",
     });
     setEditingClassId(classItem.id);
     setIsModalOpen(true);
@@ -147,6 +151,8 @@ const AdminClasses = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     const trimmedClassId = formState.classId.trim();
+    const selectedTeacher = teachers.find((teacher) => teacher.id === formState.teacher);
+    const selectedTeacherName = selectedTeacher?.name || formState.teacherName || "";
 
     if (!trimmedClassId) {
       pushToast({
@@ -174,6 +180,7 @@ const AdminClasses = () => {
         room: formState.room.trim(),
         schedule: formState.schedule.trim(),
         teacher: formState.teacher,
+        teacherName: selectedTeacherName,
       };
 
       if (editingClassId) {
@@ -290,7 +297,10 @@ const AdminClasses = () => {
                       {classItem.schedule ? `Schedule: ${classItem.schedule}` : "Schedule not set"}
                     </p>
                     <p className="text-xs font-semibold uppercase tracking-wide text-unt-green">
-                      {classItem.teacher ? teacherLookup[classItem.teacher] || classItem.teacher : "No instructor"}
+                      {classItem.teacherName
+                        || teacherLookup[classItem.teacher]
+                        || classItem.teacher
+                        || "No instructor"}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">

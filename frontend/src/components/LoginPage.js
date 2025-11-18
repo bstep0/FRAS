@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import ThemeToggle from "./ThemeToggle";
 import { auth, authReady, db } from "../firebaseConfig";
 
@@ -19,12 +19,24 @@ const LoginPage = () => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      const usersRef = collection(db, "users");
-      const roleQuery = query(usersRef, where("email", "==", email));
-      const snapshot = await getDocs(roleQuery);
+      const userRef = doc(db, "users", user.uid);
+      const userSnapshot = await getDoc(userRef);
 
-      if (!snapshot.empty) {
-        const userData = snapshot.docs[0].data();
+      let userData = null;
+
+      if (userSnapshot.exists()) {
+        userData = userSnapshot.data();
+      } else {
+        const usersRef = collection(db, "users");
+        const roleQuery = query(usersRef, where("email", "==", email));
+        const snapshot = await getDocs(roleQuery);
+
+        if (!snapshot.empty) {
+          userData = snapshot.docs[0].data();
+        }
+      }
+
+      if (userData) {
 
         switch (userData.role) {
           case "admin":

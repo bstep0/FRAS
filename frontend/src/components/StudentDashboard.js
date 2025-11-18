@@ -65,23 +65,8 @@ const StudentDashboard = () => {
               const classData = classSnap.data();
               const classCode = classData.classId || classSnap.id;
 
-              let teacherName = "";
-              const teacherId = classData.teacher;
-              if (teacherId) {
-                try {
-                  const teacherRef = doc(db, "users", teacherId);
-                  const teacherSnap = await getDoc(teacherRef);
-                  if (teacherSnap.exists()) {
-                    const teacherData = teacherSnap.data();
-                    teacherName = `${teacherData.fname} ${teacherData.lname}`;
-                  } else {
-                    teacherName = teacherId;
-                  }
-                } catch (error) {
-                  console.error("Error fetching teacher info:", error);
-                  teacherName = teacherId;
-                }
-              }
+              const teacherName =
+                (classData.teacherName || classData.teacherDisplayName || classData.teacher || "").trim();
 
               return {
                 id: classSnap.id,
