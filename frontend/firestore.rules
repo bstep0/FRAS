@@ -53,6 +53,36 @@ service cloud.firestore {
         && lower(resourceData.email) == lowerAuthEmail();
     }
 
+    function attendanceStudentId(resourceData) {
+      return resourceData.studentID is string
+        ? resourceData.studentID
+        : resourceData.studentId;
+    }
+
+    function matchesAuthStudentId(studentId) {
+      return isSignedIn()
+        && studentId is string
+        && (
+          studentId == request.auth.uid
+            || (request.auth.token.studentID is string && studentId == request.auth.token.studentID)
+            || (request.auth.token.studentId is string && studentId == request.auth.token.studentId)
+        );
+    }
+
+    function linkedUserRecordMatchesAuthUser(resourceData) {
+      let studentId = attendanceStudentId(resourceData);
+      let userDoc = studentId is string
+        ? get(/databases/$(database)/documents/users/$(studentId))
+        : null;
+
+      return userDoc != null && userDoc.exists()
+        && (
+          requestEmailMatches(userDoc.data)
+            || matchesAuthStudentId(userDoc.data.studentID)
+            || matchesAuthStudentId(userDoc.data.userId)
+        );
+    }
+
     match /users/{userId} {
       allow get, list: if staffCanAccess() || (isStudent() && requestEmailMatches(resource.data));
 
@@ -75,9 +105,11 @@ service cloud.firestore {
       allow read, write: if staffCanAccess();
 
       allow get, list: if isStudent() && isSignedIn()
-        && ((resource.data.studentID != null && resource.data.studentID == request.auth.uid)
-          || (resource.data.studentId != null && resource.data.studentId == request.auth.uid)
-          || requestEmailMatches(resource.data));
+        && (
+          matchesAuthStudentId(attendanceStudentId(resource.data))
+            || requestEmailMatches(resource.data)
+            || linkedUserRecordMatchesAuthUser(resource.data)
+        );
     }
 
     match /notifications/{notificationId} {
