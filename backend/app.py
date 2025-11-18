@@ -42,11 +42,31 @@ def _get_home_cidr_strings():
     return DEFAULT_HOME_CIDR_STRINGS
 
 
-def refresh_allowed_networks():
-    global HOME_NETWORKS, ALLOWED_IP_NETWORKS
+def _get_eaglenet_networks():
+    env_value = os.environ.get("EAGLENET_IP_ALLOWLIST")
+    if env_value:
+        networks = []
+        for cidr in env_value.split(","):
+            cidr = cidr.strip()
+            if not cidr:
+                continue
+            try:
+                networks.append(ip_network(cidr))
+            except ValueError:
+                continue
 
+        if networks:
+            return tuple(networks)
+
+    return UNT_EAGLENET_NETWORKS
+
+
+def refresh_allowed_networks():
+    global HOME_NETWORKS, ALLOWED_IP_NETWORKS, EAGLENET_NETWORKS
+
+    EAGLENET_NETWORKS = _get_eaglenet_networks()
     HOME_NETWORKS = tuple(ip_network(cidr) for cidr in _get_home_cidr_strings())
-    ALLOWED_IP_NETWORKS = UNT_EAGLENET_NETWORKS + HOME_NETWORKS
+    ALLOWED_IP_NETWORKS = EAGLENET_NETWORKS + HOME_NETWORKS
 
 
 refresh_allowed_networks()
@@ -588,10 +608,6 @@ def export_attendance():
         mimetype="text/csv",
         headers=headers,
     )
-
-
-def _perform_face_verification(**kwargs):
-    return DeepFace.verify(**kwargs)
 
 
 def _process_face_recognition_request():
