@@ -8,6 +8,7 @@ import datetime
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 import ipaddress
 import os
+from urllib.parse import urlparse
 from deepface import DeepFace
 import concurrent.futures
 from zoneinfo import ZoneInfo
@@ -30,6 +31,15 @@ except ImportError:  # pragma: no cover - fallback for script execution
 # when running demos off-campus. Production should rely on the UNT EagleNet
 # ranges from allowed_networks.py.
 DEFAULT_HOME_CIDR_STRINGS = ("192.168.1.70/32",)
+
+PRODUCTION_ORIGIN = "https://csce-4095---it-capstone-i.web.app"
+DEFAULT_DEMO_ORIGINS = (
+    PRODUCTION_ORIGIN,
+    "https://fr-as-demo.ngrok-free.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://192.168.1.70:5173",
+)
 
 
 def _get_home_cidr_strings():
@@ -70,6 +80,35 @@ def refresh_allowed_networks():
 
 
 refresh_allowed_networks()
+
+
+def _parse_allowed_cors_origins():
+    extra_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+    parsed = tuple(
+        origin.strip()
+        for origin in extra_origins.split(",")
+        if origin.strip()
+    )
+    return DEFAULT_DEMO_ORIGINS + parsed
+
+
+ALLOWED_CORS_ORIGINS = _parse_allowed_cors_origins()
+
+
+def _add_vary_header(response, value):
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return
+
+    try:
+        headers.add("Vary", value)
+    except AttributeError:
+        existing = headers.get("Vary", "")
+        values = [item.strip() for item in existing.split(",") if item.strip()]
+        if value not in values:
+            values.append(value)
+        if values:
+            headers["Vary"] = ", ".join(values)
 
 
 app = Flask(__name__)
@@ -113,11 +152,49 @@ def _perform_face_verification(
 
 @app.after_request
 def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "https://csce-4095---it-capstone-i.web.app"
+    origin = request.headers.get("Origin")
+    _add_vary_header(response, "Origin")
+
+    if origin and _is_origin_allowed(origin):
+        allowed_origin = origin
+    else:
+        allowed_origin = PRODUCTION_ORIGIN
+
+    response.headers["Access-Control-Allow-Origin"] = allowed_origin
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
+
+
+def _is_origin_allowed(origin):
+    parsed = urlparse(origin)
+
+    if parsed.scheme not in {"http", "https"}:
+        return False
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+
+    origin_no_trailing_slash = parsed._replace(path="", params="", query="", fragment="").geturl()
+    if origin_no_trailing_slash in ALLOWED_CORS_ORIGINS:
+        return True
+
+    hostname = hostname.lower()
+
+    if hostname.endswith(".ngrok-free.app"):
+        return True
+
+    try:
+        ip = ip_address(hostname)
+    except ValueError:
+        ip = None
+
+    if ip:
+        return any(ip in network for network in HOME_NETWORKS)
+
+    return False
 
 
 # Initialize Firebase Admin SDK
