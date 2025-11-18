@@ -25,34 +25,31 @@ except ImportError:  # pragma: no cover - fallback for script execution
 # ------------------------------
 # Network allowlist configuration
 # ------------------------------
-# Home LAN networks - adjust if your home network uses a different range.
-HOME_CIDR_STRINGS = (
-    "192.168.0.0/16",  # covers 192.168.x.x, including 192.168.1.70
-    # If your ISP gives you a stable IPv6 prefix at home, you can optionally
-    # add it here, for example: "2600:1702:5230:8490::/64"
-)
-
-HOME_NETWORKS = tuple(ip_network(cidr) for cidr in HOME_CIDR_STRINGS)
+# Home LAN networks are intentionally narrow. Override HOME_CIDR_STRINGS or
+# HOME_CIDRS with a comma-separated list (e.g., "192.168.1.70/32,2600:abcd::/64")
+# when running demos off-campus. Production should rely on the UNT EagleNet
+# ranges from allowed_networks.py.
+DEFAULT_HOME_CIDR_STRINGS = ("192.168.1.70/32",)
 
 
-def _load_allowed_networks():
-    env_cidrs = os.environ.get("EAGLENET_IP_ALLOWLIST", "")
-    parsed_env_networks = []
+def _get_home_cidr_strings():
+    env_value = os.environ.get("HOME_CIDR_STRINGS") or os.environ.get("HOME_CIDRS")
+    if env_value:
+        cidr_strings = [cidr.strip() for cidr in env_value.split(",") if cidr.strip()]
+        if cidr_strings:
+            return tuple(cidr_strings)
 
-    for raw in env_cidrs.split(","):
-        cidr = raw.strip()
-        if not cidr:
-            continue
-        try:
-            parsed_env_networks.append(ip_network(cidr))
-        except ValueError:
-            continue
-
-    return tuple(parsed_env_networks) + UNT_EAGLENET_NETWORKS + HOME_NETWORKS
+    return DEFAULT_HOME_CIDR_STRINGS
 
 
-# Combine EagleNet networks (from allowed_networks.py), optional env overrides, and home networks.
-ALLOWED_IP_NETWORKS = _load_allowed_networks()
+def refresh_allowed_networks():
+    global HOME_NETWORKS, ALLOWED_IP_NETWORKS
+
+    HOME_NETWORKS = tuple(ip_network(cidr) for cidr in _get_home_cidr_strings())
+    ALLOWED_IP_NETWORKS = UNT_EAGLENET_NETWORKS + HOME_NETWORKS
+
+
+refresh_allowed_networks()
 
 
 app = Flask(__name__)
@@ -373,7 +370,7 @@ def is_ip_allowed(ip_str):
 
     Allowed sources:
       - UNT EagleNet ranges (see allowed_networks.py)
-      - Home LAN ranges (HOME_CIDR_STRINGS)
+      - Home LAN ranges (HOME_CIDR_STRINGS/HOME_CIDRS; defaults to 192.168.1.70/32)
     """
     if not ip_str:
         return False
