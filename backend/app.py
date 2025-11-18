@@ -47,7 +47,7 @@ CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 # How long pending records should wait before recheck (for logging & UI)
 # You can change this for testing, or set env var PENDING_VERIFICATION_MINUTES.
-PENDING_RECHECK_MINUTES = int(os.environ.get("PENDING_VERIFICATION_MINUTES", "45"))
+PENDING_RECHECK_MINUTES = int(os.environ.get("PENDING_VERIFICATION_MINUTES"))
 
 
 def _to_central_iso(timestamp_like):
