@@ -97,6 +97,9 @@ def _load_eaglenet_allowlist():
             continue
 
     if not networks:
+        networks.extend(UNT_EAGLENET_NETWORKS)
+
+    if not networks:
         # Default to only allowing localhost when no configuration is supplied.
         networks.append(ipaddress.ip_network("127.0.0.1/32"))
 
@@ -154,6 +157,217 @@ def parse_schedule(schedule_str):
     start_time = parse_time_12h(start_str)
     end_time = parse_time_12h(end_str)
     return start_time, end_time
+
+
+DAY_ABBREVIATIONS = {
+    "M": 0,
+    "MON": 0,
+    "MO": 0,
+    "T": 1,
+    "TU": 1,
+    "TUE": 1,
+    "TUES": 1,
+    "W": 2,
+    "WE": 2,
+    "WED": 2,
+    "R": 3,
+    "TH": 3,
+    "THU": 3,
+    "THUR": 3,
+    "THURS": 3,
+    "F": 4,
+    "FR": 4,
+    "FRI": 4,
+    "S": 5,
+    "SA": 5,
+    "SAT": 5,
+    "U": 6,
+    "SU": 6,
+    "SUN": 6,
+}
+
+
+def _meeting_days(schedule_str):
+    """Return a set of weekday numbers the class meets on.
+
+    If the schedule string does not specify meeting days, an empty set is returned
+    to indicate that the class may meet every day.
+    """
+
+    if not schedule_str:
+        return set()
+
+    parts = schedule_str.strip().split()
+    if not parts:
+        return set()
+
+    day_prefix = parts[0].upper().replace(",", "")
+    if any(char.isdigit() for char in day_prefix):
+        return set()
+
+    days = set()
+    idx = 0
+    while idx < len(day_prefix):
+        slice_two = day_prefix[idx : idx + 2]
+        if slice_two in {"TH", "TU", "SA", "SU"}:
+            day_value = DAY_ABBREVIATIONS.get(slice_two)
+            if day_value is not None:
+                days.add(day_value)
+            idx += 2
+            continue
+
+        char = day_prefix[idx]
+        day_value = DAY_ABBREVIATIONS.get(char)
+        if day_value is not None:
+            days.add(day_value)
+        idx += 1
+
+    return days
+
+
+def _class_meets_today(schedule_str, current_date):
+    """Return True if the class schedule includes the provided date."""
+
+    meeting_days = _meeting_days(schedule_str)
+    if not meeting_days:
+        return True
+
+    return current_date.weekday() in meeting_days
+
+
+def _class_schedule_window(schedule_str, target_date):
+    """Return start and end datetimes for a class meeting on target_date."""
+
+    start_time, end_time = parse_schedule(schedule_str)
+    if not start_time or not end_time:
+        return None, None
+
+    start_dt = datetime.datetime(
+        target_date.year,
+        target_date.month,
+        target_date.day,
+        start_time.hour,
+        start_time.minute,
+        tzinfo=CENTRAL_TZ,
+    )
+
+    end_dt = datetime.datetime(
+        target_date.year,
+        target_date.month,
+        target_date.day,
+        end_time.hour,
+        end_time.minute,
+        tzinfo=CENTRAL_TZ,
+    )
+
+    return start_dt, end_dt
+
+
+def _extract_student_ids(class_data):
+    """Return a mapping of student ID to provided display name from class data."""
+
+    roster_candidates = [
+        class_data.get("students"),
+        class_data.get("studentIds"),
+        class_data.get("enrolledStudents"),
+        class_data.get("classList"),
+    ]
+
+    ids_to_names = {}
+
+    for roster in roster_candidates:
+        if not roster:
+            continue
+
+        for entry in roster:
+            student_id = None
+            display_name = ""
+
+            if isinstance(entry, str):
+                student_id = entry
+            elif isinstance(entry, dict):
+                student_id = entry.get("id") or entry.get("studentID") or entry.get("studentId")
+                display_name = (
+                    entry.get("name")
+                    or entry.get("fullName")
+                    or entry.get("displayName")
+                    or ""
+                )
+
+            if student_id:
+                ids_to_names.setdefault(str(student_id), display_name)
+
+    return ids_to_names
+
+
+def mark_absent_students_for_completed_classes(now=None, firestore_client=None):
+    """Insert Absent attendance records for students who never checked in."""
+
+    if firestore_client is None:
+        firestore_client = db
+
+    now_central = now or datetime.datetime.now(CENTRAL_TZ)
+    if now_central.tzinfo is None:
+        now_central = now_central.replace(tzinfo=CENTRAL_TZ)
+    else:
+        now_central = now_central.astimezone(CENTRAL_TZ)
+
+    today_date = now_central.date()
+    today_str = today_date.strftime("%Y-%m-%d")
+
+    attendance_collection = firestore_client.collection("attendance")
+    classes_collection = firestore_client.collection("classes")
+
+    created_records = []
+
+    try:
+        classes_stream = classes_collection.stream()
+    except Exception:
+        return created_records
+
+    for class_doc in classes_stream:
+        class_data = class_doc.to_dict() or {}
+        schedule_str = str(class_data.get("schedule", "")).strip()
+
+        if not schedule_str:
+            continue
+
+        if not _class_meets_today(schedule_str, today_date):
+            continue
+
+        _, end_dt = _class_schedule_window(schedule_str, today_date)
+        if not end_dt or now_central < end_dt:
+            continue
+
+        student_names = _extract_student_ids(class_data)
+        for student_id, display_name in student_names.items():
+            record_id = f"{class_doc.id}_{student_id}_{today_str}"
+
+            attendance_doc = attendance_collection.document(record_id).get()
+            if getattr(attendance_doc, "exists", False):
+                continue
+
+            absent_record = {
+                "studentID": student_id,
+                "studentName": display_name or None,
+                "classID": class_doc.id,
+                "date": datetime.datetime(
+                    today_date.year,
+                    today_date.month,
+                    today_date.day,
+                    tzinfo=CENTRAL_TZ,
+                ),
+                "status": "Absent",
+                "decidedAt": now_central,
+                "decisionMethod": "auto-absent",
+                "createdAt": firestore.SERVER_TIMESTAMP,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            }
+
+            attendance_collection.document(record_id).set(absent_record)
+            created_records.append(record_id)
+
+    return created_records
 
 
 def get_attendance_status(now_dt, start_dt, end_dt):
@@ -502,7 +716,7 @@ def finalize_attendance():
     if pending_status is None:
         pending_status = record.get("pendingStatus")
 
-    if pending_status not in {"Present", "Absent"}:
+    if pending_status not in {"Present", "Absent", "Late"}:
         return jsonify({
             "status": "error",
             "message": "Pending attendance record is invalid."
@@ -580,7 +794,7 @@ def is_ip_allowed(ip_str):
         client_ip = ip_address(ip_str)
     except ValueError:
         return False
-    return any(client_ip in network for network in UNT_EAGLENET_NETWORKS)
+    return any(client_ip in network for network in EAGLENET_ALLOWLIST)
 
 
 def _process_face_recognition_request():

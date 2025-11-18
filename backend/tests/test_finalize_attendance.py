@@ -70,14 +70,23 @@ class FakeCollection:
     def document(self, doc_id):
         return FakeDocument(self._store, doc_id)
 
+    def stream(self):
+        return [FakeDocumentSnapshot(data, doc_id) for doc_id, data in self._store.items()]
+
 
 class FakeFirestore:
-    def __init__(self, initial_attendance=None):
+    def __init__(self, initial_attendance=None, initial_classes=None):
         attendance_data = {}
         if initial_attendance:
             for key, value in initial_attendance.items():
                 attendance_data[key] = dict(value)
-        self._collections = {"attendance": attendance_data}
+
+        class_data = {}
+        if initial_classes:
+            for key, value in initial_classes.items():
+                class_data[key] = dict(value)
+
+        self._collections = {"attendance": attendance_data, "classes": class_data}
 
     def collection(self, name):
         store = self._collections.setdefault(name, {})
@@ -93,10 +102,10 @@ class FakeBucket:
 
 @pytest.fixture
 def load_app(monkeypatch):
-    def _loader(initial_attendance):
+    def _loader(initial_attendance, initial_classes=None):
         monkeypatch.setenv("EAGLENET_IP_ALLOWLIST", "10.0.0.0/8")
 
-        fake_db = FakeFirestore(initial_attendance)
+        fake_db = FakeFirestore(initial_attendance, initial_classes)
 
         flask_module = types.ModuleType("flask")
 
@@ -198,6 +207,7 @@ def load_app(monkeypatch):
 
         firestore_module = types.ModuleType("firebase_admin.firestore")
         firestore_module.DELETE_FIELD = DELETE_FIELD
+        firestore_module.SERVER_TIMESTAMP = object()
         firestore_module.client = lambda: fake_db
 
         storage_module = types.ModuleType("firebase_admin.storage")
@@ -374,3 +384,87 @@ def test_finalize_attendance_rejects_outside_allowlist(load_app):
     assert "proposedStatus" not in stored_record
     assert "isPending" not in stored_record
     assert "finalizedAt" in stored_record
+
+
+def test_mark_absent_students_creates_missing_records(load_app):
+    class_id = "CPSC101"
+    present_student = "A12345"
+    absent_student = "B54321"
+
+    today = datetime.date(2024, 4, 1)  # Monday
+    now_central = datetime.datetime(2024, 4, 1, 10, 30, tzinfo=CENTRAL_TZ)
+
+    existing_attendance = {
+        f"{class_id}_{present_student}_2024-04-01": {
+            "studentID": present_student,
+            "classID": class_id,
+            "status": "Present",
+        }
+    }
+
+    class_roster = {
+        class_id: {
+            "schedule": "MWF 8:00AM - 9:00AM",
+            "students": [present_student, {"studentId": absent_student, "name": "Pat Student"}],
+        }
+    }
+
+    app_module, fake_db = load_app(existing_attendance, initial_classes=class_roster)
+
+    created = app_module.mark_absent_students_for_completed_classes(
+        now=now_central, firestore_client=fake_db
+    )
+
+    expected_record_id = f"{class_id}_{absent_student}_2024-04-01"
+    assert created == [expected_record_id]
+
+    stored_record = fake_db.get_attendance(expected_record_id)
+    assert stored_record["status"] == "Absent"
+    assert stored_record["studentID"] == absent_student
+    assert stored_record["classID"] == class_id
+    assert stored_record["studentName"] == "Pat Student"
+    assert stored_record["decisionMethod"] == "auto-absent"
+    assert stored_record["decidedAt"] == now_central
+    assert stored_record["date"].date() == today
+
+
+def test_mark_absent_students_skips_future_classes(load_app):
+    class_id = "CPSC102"
+    now_central = datetime.datetime(2024, 4, 1, 8, 45, tzinfo=CENTRAL_TZ)
+
+    class_roster = {
+        class_id: {
+            "schedule": "MWF 8:30AM - 9:50AM",
+            "students": ["A10000"],
+        }
+    }
+
+    app_module, fake_db = load_app({}, initial_classes=class_roster)
+
+    created = app_module.mark_absent_students_for_completed_classes(
+        now=now_central, firestore_client=fake_db
+    )
+
+    assert created == []
+    assert fake_db._collections["attendance"] == {}
+
+
+def test_mark_absent_students_respects_meeting_days(load_app):
+    class_id = "CPSC103"
+    now_central = datetime.datetime(2024, 4, 1, 17, 0, tzinfo=CENTRAL_TZ)  # Monday
+
+    class_roster = {
+        class_id: {
+            "schedule": "T 4:00PM - 5:00PM",
+            "students": ["A20000"],
+        }
+    }
+
+    app_module, fake_db = load_app({}, initial_classes=class_roster)
+
+    created = app_module.mark_absent_students_for_completed_classes(
+        now=now_central, firestore_client=fake_db
+    )
+
+    assert created == []
+    assert fake_db._collections["attendance"] == {}
