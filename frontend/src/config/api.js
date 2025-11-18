@@ -1,26 +1,38 @@
 // Backend configuration for AttendU
 // ---------------------------------
-// Default: use your desktop backend on your home network (LAN).
-// Override: if localStorage.apiBase is set in the browser, use that instead.
-//   - This lets your campus laptop use an ngrok URL WITHOUT redeploying.
-//   - Your home machines keep using the LAN IP by default.
+// Resolve the API base automatically from the current page, environment, or
+// vetted fallbacks so users never have to set localStorage overrides.
 
-// 1) Default backend base URL (home desktop on LAN)
-const DEFAULT_API_BASE = "http://192.168.1.70:5000"; // update if your LAN IP changes
+// Primary candidates
+const LAN_API_BASE = "http://192.168.1.70:5000"; // update if your LAN IP changes
+const NGROK_API_BASE = "https://uncoyly-crystallitic-fransisca.ngrok-free.dev"; // ngrok tunnel for off-campus access
+const HOSTED_API_BASE = "https://csce-4095---it-capstone-i.web.app"; // deployed frontend domain
 
-// 2) Resolve the active base URL
-function resolveApiBase() {
-  // In the browser, allow a local override via localStorage
-  if (typeof window !== "undefined" && window.localStorage) {
-    const stored = window.localStorage.getItem("apiBase");
-    if (stored && typeof stored === "string" && stored.trim().length > 0) {
-      return stored.replace(/\/$/, ""); // strip trailing slash
-    }
-  }
+const FALLBACK_API_BASES = [
+  // 1) Explicit environment override
+  process.env.REACT_APP_API_BASE,
+  // 2) Same-origin backend (covers localhost and deployed hosting)
+  typeof window !== "undefined" ? window.location.origin : null,
+  // 3) Known fallbacks
+  LAN_API_BASE,
+  NGROK_API_BASE,
+  HOSTED_API_BASE,
+];
 
-  // Fallback: use the LAN backend
-  return DEFAULT_API_BASE.replace(/\/$/, "");
-}
+const normalizeBase = (base) => {
+  if (!base || typeof base !== "string") return null;
+  const trimmed = base.trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/\/$/, "");
+};
+
+const resolveApiBase = () => {
+  const uniqueCandidates = Array.from(
+    new Set(FALLBACK_API_BASES.map(normalizeBase).filter(Boolean))
+  );
+
+  return uniqueCandidates[0];
+};
 
 const API_BASE = resolveApiBase();
 
