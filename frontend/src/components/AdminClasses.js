@@ -184,14 +184,6 @@ const AdminClasses = () => {
       };
 
       if (editingClassId) {
-        if (trimmedClassId !== editingClassId) {
-          pushToast({
-            tone: "warning",
-            title: "Class ID locked",
-            message: "The class ID cannot be changed once created.",
-          });
-          return;
-        }
         const classRef = doc(db, "classes", editingClassId);
         const existing = classes.find((classItem) => classItem.id === editingClassId);
         await updateDoc(classRef, payload);
@@ -352,7 +344,7 @@ const AdminClasses = () => {
                     value={formState.classId}
                     onChange={(event) => handleInputChange("classId", event.target.value)}
                     required
-                    disabled={Boolean(editingClassId)}
+                    disabled={isSaving}
                     className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white/90 px-4 py-2 text-sm text-slate-900 shadow-sm transition focus:border-unt-green focus:outline-none focus:ring-2 focus:ring-unt-green/30 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700/60 dark:bg-slate-900/70 dark:text-white dark:disabled:bg-slate-800"
                     placeholder="e.g., CS101"
                   />
