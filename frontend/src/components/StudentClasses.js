@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { Link } from "react-router-dom";
 import { auth, db } from "../firebaseConfig";
@@ -10,6 +10,7 @@ const StudentClasses = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { pushToast } = useNotifications();
   const user = auth.currentUser;
+  const teacherProfileCache = useRef(new Map());
 
   useEffect(() => {
     let isMounted = true;
@@ -48,6 +49,41 @@ const StudentClasses = () => {
           return;
         }
 
+        const resolveTeacherName = async (teacherId) => {
+          if (teacherProfileCache.current.has(teacherId)) {
+            return teacherProfileCache.current.get(teacherId);
+          }
+
+          const fetchPromise = (async () => {
+            try {
+              const teacherRef = doc(db, "users", teacherId);
+              const teacherSnap = await getDoc(teacherRef);
+
+              if (!teacherSnap.exists()) {
+                return "";
+              }
+
+              const teacherData = teacherSnap.data();
+              const resolvedName =
+                [teacherData.fname, teacherData.lname].filter(Boolean).join(" ") ||
+                teacherData.displayName ||
+                teacherData.name ||
+                teacherData.email ||
+                "";
+
+              return resolvedName.trim();
+            } catch (error) {
+              console.error(`Failed to fetch teacher profile ${teacherId}`, error);
+              return "";
+            }
+          })();
+
+          teacherProfileCache.current.set(teacherId, fetchPromise);
+          const resolvedName = await fetchPromise;
+          teacherProfileCache.current.set(teacherId, resolvedName);
+          return resolvedName;
+        };
+
         const fetchedClasses = await Promise.all(
           enrolledClassIds.map(async (classId) => {
             try {
@@ -60,14 +96,17 @@ const StudentClasses = () => {
 
               const classData = classSnap.data();
               const classCode = classData.classId || classSnap.id;
+              const teacherId = (classData.teacher || "").trim();
               const teacherName =
-                (classData.teacherName || classData.teacherDisplayName || classData.teacher || "").trim();
+                (classData.teacherName || classData.teacherDisplayName || "").trim() ||
+                (teacherId ? await resolveTeacherName(teacherId) : "");
 
               return {
                 id: classSnap.id,
                 code: classCode,
                 name: classData.name,
                 teacher: teacherName,
+                teacherId,
                 room: classData.room,
                 schedule: classData.schedule,
               };
@@ -125,7 +164,7 @@ const StudentClasses = () => {
                   <p className="text-base font-semibold text-slate-900 dark:text-white">
                     {(classItem.code || classItem.id) + " - " + classItem.name}
                   </p>
-                  <p>Teacher: {classItem.teacher || "TBD"}</p>
+                  <p>Teacher: {classItem.teacher || (classItem.teacherId ? classItem.teacherId : "TBD")}</p>
                   <p>Room: {classItem.room || "TBD"}</p>
                   <p>Scheduled Time: {classItem.schedule || "See syllabus"}</p>
                 </div>
