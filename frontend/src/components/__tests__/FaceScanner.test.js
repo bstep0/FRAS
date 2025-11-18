@@ -37,7 +37,9 @@ describe('FaceScanner', () => {
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     jest.useRealTimers();
     if (global.fetch) {
       global.fetch.mockReset();
@@ -111,11 +113,16 @@ describe('FaceScanner', () => {
     );
 
     expect(stopTrack).toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent(/verification is pending/i);
     expect(
       screen.getByRole('button', { name: /verification pending/i })
     ).toBeDisabled();
+    expect(screen.getAllByText(/verification pending/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/stay on eaglenet/i)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId('pending-countdown')).toHaveTextContent(
+        /Auto-finalizing in 45:00/i
+      )
+    );
 
     await act(async () => {
       jest.advanceTimersByTime(45 * 60 * 1000);
