@@ -89,6 +89,9 @@ const NotificationsPage = ({ title = "Notifications" }) => {
     const createdAt = resolveTimestamp(notification.createdAt);
     const tone = toneForNotification(notification);
     const badgeClass = toneBadgeClasses[tone] || toneBadgeClasses.info;
+    const typeLabel = notification?.type
+      ? String(notification.type).replace(/[-_]+/g, " ")
+      : null;
 
     return (
       <li
@@ -105,6 +108,11 @@ const NotificationsPage = ({ title = "Notifications" }) => {
               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${badgeClass}`}>
                 {tone.charAt(0).toUpperCase() + tone.slice(1)}
               </span>
+              {typeLabel ? (
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {typeLabel}
+                </span>
+              ) : null}
               {createdAt ? (
                 <span className="text-xs text-gray-500 dark:text-slate-400">{formatDateTime(createdAt)}</span>
               ) : null}

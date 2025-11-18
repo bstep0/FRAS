@@ -8,6 +8,7 @@ import { processAttendanceRisk } from "../lib/attendance-risk";
 import {
   processAttendanceDecisionTask,
 } from "../lib/attendance-decision";
+import { processAttendanceNotifications } from "../lib/attendance-notifications";
 import { parseSchedule, CENTRAL_TIMEZONE } from "../lib/time";
 import type {
   AttendanceDecisionTaskData,
@@ -188,6 +189,71 @@ describe("notification orchestration", () => {
     expect(payload.surfaces).to.deep.equal(["banner", "inbox"]);
     expect(payload.toast).to.be.undefined;
     expect(payload.payload).to.include({ showToast: false });
+  });
+
+  it("emits pending and teacher review notifications when a scan is created pending", async () => {
+    const writer = sinon.spy(async (_creation: NotificationCreation) => {});
+
+    await processAttendanceNotifications(
+      {
+        before: null,
+        after: {
+          id: "att-10",
+          classID: "CS101",
+          studentID: "student-1",
+          status: "pending",
+          isPending: true,
+        } as AttendanceRecord,
+      },
+      {
+        writer,
+        fetchStudent: async () => ({ id: "student-1", email: "student@example.com" }),
+        fetchClass: async () => ({ id: "CS101", name: "Intro to CS", teacher: "teacher-1" } as ClassInfo),
+        fetchTeacher: async () => ({ id: "teacher-1", email: "teacher@example.com" }),
+      }
+    );
+
+    expect(writer).to.have.callCount(2);
+    const types = writer.args.map(([arg]) => arg.type);
+    expect(types).to.include("attendance-pending");
+    expect(types).to.include("attendance-pending-review");
+  });
+
+  it("sends absence alerts, threshold warnings, and summaries when attendance finalizes as absent", async () => {
+    const writer = sinon.spy(async (_creation: NotificationCreation) => {});
+
+    await processAttendanceNotifications(
+      {
+        before: {
+          id: "att-20",
+          classID: "CS101",
+          studentID: "student-1",
+          status: "pending",
+        } as AttendanceRecord,
+        after: {
+          id: "att-20",
+          classID: "CS101",
+          studentID: "student-1",
+          status: "Absent",
+          date: new Date("2024-04-01T14:00:00Z"),
+        } as AttendanceRecord,
+      },
+      {
+        writer,
+        fetchStudent: async () => ({ id: "student-1", email: "student@example.com" }),
+        fetchClass: async () => ({ id: "CS101", name: "Intro to CS", teacher: "teacher-1" } as ClassInfo),
+        fetchTeacher: async () => ({ id: "teacher-1", email: "teacher@example.com" }),
+        fetchAbsenceCount: async () => 5,
+        fetchDailySummary: async () => ({ Present: 8, Absent: 2, Pending: 1 }),
+      }
+    );
+
+    const types = writer.args.map(([arg]) => arg.type);
+    expect(types).to.include("attendance-pending-resolved");
+    expect(types).to.include("attendance-result");
+    expect(types).to.include("attendance-missed-class");
+    expect(types).to.include("attendance-absence-threshold");
+    expect(types).to.include("attendance-summary");
   });
 });
 

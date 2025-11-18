@@ -3,6 +3,8 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
+import { DateTime } from "luxon";
+import { Timestamp } from "firebase-admin/firestore";
 
 import { db, fieldValue } from "./firebase";
 import { processClassReminders } from "./lib/class-reminders";
@@ -11,6 +13,7 @@ import {
   processAttendanceDecisionTask,
   scheduleDecisionNotification,
 } from "./lib/attendance-decision";
+import { processAttendanceNotifications } from "./lib/attendance-notifications";
 import { CENTRAL_TIMEZONE, normalizeStatus } from "./lib/time";
 import type {
   AttendanceDecisionTaskData,
@@ -70,6 +73,11 @@ export const attendanceWriteHandler = onDocumentWritten(
         after: afterRecord,
       });
 
+      await processAttendanceNotifications({
+        before: beforeRecord,
+        after: afterRecord,
+      });
+
       if (!beforeSnapshot?.exists) {
         const status = normalizeStatus(afterRecord.status);
         if (status === "pending") {
@@ -83,6 +91,44 @@ export const attendanceWriteHandler = onDocumentWritten(
 export const attendanceDecisionQueue = onTaskDispatched<AttendanceDecisionTaskData>(
   async (request) => {
     await processAttendanceDecisionTask(request.data);
+  }
+);
+
+export const cleanupNotificationReminders = onSchedule(
+  {
+    schedule: "every 60 minutes",
+    timeZone: CENTRAL_TIMEZONE,
+  },
+  async () => {
+    const cutoff = Timestamp.fromDate(
+      DateTime.now().setZone(CENTRAL_TIMEZONE).minus({ hours: 24 }).toJSDate()
+    );
+
+    const typesToCleanup = ["class-start-reminder", "attendance-pending"];
+
+    await Promise.all(
+      typesToCleanup.map(async (type) => {
+        let snapshot = await db
+          .collection("notifications")
+          .where("type", "==", type)
+          .where("createdAt", "<", cutoff)
+          .limit(200)
+          .get();
+
+        while (!snapshot.empty) {
+          const batch = db.batch();
+          snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+          await batch.commit();
+
+          snapshot = await db
+            .collection("notifications")
+            .where("type", "==", type)
+            .where("createdAt", "<", cutoff)
+            .limit(200)
+            .get();
+        }
+      })
+    );
   }
 );
 

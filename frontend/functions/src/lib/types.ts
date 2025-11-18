@@ -6,6 +6,7 @@ export interface ClassInfo {
   schedule?: string;
   room?: string;
   reminderLeadMinutes?: number;
+  teacher?: string;
 }
 
 export interface StudentInfo {
@@ -23,6 +24,7 @@ export interface AttendanceRecord {
   isPending?: boolean;
   proposedStatus?: string;
   date?: Date | Timestamp;
+  pendingRecheckAt?: Date | Timestamp | null;
 }
 
 export interface AttendanceDecisionTaskData {
@@ -55,5 +57,13 @@ export interface NotificationCreation {
   dedupeKey: string;
   toast?: NotificationToastOptions;
   banner?: NotificationBannerOptions;
+}
+
+export interface UserInfo {
+  id: string;
+  email?: string;
+  fname?: string;
+  lname?: string;
+  role?: string;
 }
 
