@@ -6,6 +6,7 @@ from ipaddress import ip_network
 UNT_EAGLENET_CIDR_STRINGS = (
     "129.120.0.0/16",
     "108.192.43.112/32",
+    "192.168.1.70/32",
     # Additional EagleNet ranges can be appended here as needed.
 )
 

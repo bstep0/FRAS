@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify, Response, stream_with_context
 import base64
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import cv2
 import numpy as np
 import firebase_admin
@@ -13,12 +12,29 @@ from zoneinfo import ZoneInfo
 import csv
 import io
 
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_network
 
 try:
     from .allowed_networks import UNT_EAGLENET_NETWORKS
 except ImportError:  # pragma: no cover - fallback for script execution
     from allowed_networks import UNT_EAGLENET_NETWORKS
+
+
+# ------------------------------
+# Network allowlist configuration
+# ------------------------------
+# Home LAN networks - adjust if your home network uses a different range.
+HOME_CIDR_STRINGS = (
+    "192.168.0.0/16",  # covers 192.168.x.x, including 192.168.1.70
+    # If your ISP gives you a stable IPv6 prefix at home, you can optionally
+    # add it here, for example: "2600:1702:5230:8490::/64"
+)
+
+HOME_NETWORKS = tuple(ip_network(cidr) for cidr in HOME_CIDR_STRINGS)
+
+# Combine EagleNet networks (from allowed_networks.py) with home networks.
+ALLOWED_IP_NETWORKS = UNT_EAGLENET_NETWORKS + HOME_NETWORKS
+
 
 app = Flask(__name__)
 
@@ -28,32 +44,24 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "https://csce-4095---it-capstone-i.web.app"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
 
-# Define the path for credentials
-secret_path = "/etc/secrets/firebase_credentials.json"
-if os.path.exists(secret_path):
-    cred = credentials.Certificate(secret_path)
-else:
-    cred = credentials.Certificate("backend/firebase/firebase_credentials.json")
-
-# Initialize Firebase app with storage configuration
-firebase_admin.initialize_app(
-    cred,
-    {
-        "storageBucket": "csce-4095---it-capstone-i.firebasestorage.app",
-    },
-)
+# Initialize Firebase Admin SDK
+cred = credentials.Certificate("firebase/firebase_credentials.json")
+firebase_admin.initialize_app(cred, {
+    "storageBucket": "csce-4095---it-capstone-i.firebasestorage.app",
+})
 db = firestore.client()
-bucket = storage.bucket()  # Initialize storage bucket
+bucket = storage.bucket()
 
 # Timezone for Central Time
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 # How long pending records should wait before recheck (for logging & UI)
+# You can change this for testing, or set env var PENDING_VERIFICATION_MINUTES.
 PENDING_RECHECK_MINUTES = int(os.environ.get("PENDING_VERIFICATION_MINUTES", "45"))
-DEEPFACE_VERIFY_TIMEOUT_SECONDS = int(os.environ.get("DEEPFACE_VERIFY_TIMEOUT_SECONDS", "15"))
 
 
 def _to_central_iso(timestamp_like):
@@ -64,187 +72,38 @@ def _to_central_iso(timestamp_like):
     elif isinstance(timestamp_like, datetime.date):
         timestamp = datetime.datetime.combine(timestamp_like, datetime.time.min)
     else:
-        return ""
+        return None
 
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
-
     return timestamp.astimezone(CENTRAL_TZ).isoformat()
 
 
-def _to_central_date(timestamp_like):
-    """Return a YYYY-MM-DD string rendered in Central time."""
-
-    if isinstance(timestamp_like, datetime.datetime):
-        target = timestamp_like
-    elif isinstance(timestamp_like, datetime.date):
-        target = datetime.datetime.combine(timestamp_like, datetime.time.min)
-    else:
-        return ""
-
-    if target.tzinfo is None:
-        target = target.replace(tzinfo=datetime.timezone.utc)
-
-    return target.astimezone(CENTRAL_TZ).strftime("%Y-%m-%d")
-
-
-def _load_eaglenet_allowlist():
-    """Load the EagleNet IP allowlist from the environment."""
-
-    raw_allowlist = os.environ.get("EAGLENET_IP_ALLOWLIST", "")
-    networks = []
-    for entry in raw_allowlist.split(","):
-        candidate = entry.strip()
-        if not candidate:
-            continue
-        try:
-            networks.append(ipaddress.ip_network(candidate, strict=False))
-        except ValueError:
-            continue
-
-    if not networks:
-        # Default to only allowing localhost when no configuration is supplied.
-        networks.append(ipaddress.ip_network("127.0.0.1/32"))
-
-    return networks
-
-
-EAGLENET_ALLOWLIST = _load_eaglenet_allowlist()
-
-
-def extract_request_ip(flask_request):
-    """Return the originating IP from X-Forwarded-For or remote_addr."""
-
-    forwarded_for = flask_request.headers.get("X-Forwarded-For", "")
-    if forwarded_for:
-        candidate = forwarded_for.split(",")[0].strip()
-        if candidate:
-            return candidate
-    return flask_request.remote_addr or ""
-
-
-def is_ip_allowlisted(ip_address_str):
-    try:
-        parsed_ip = ipaddress.ip_address(ip_address_str)
-    except ValueError:
-        return False
-
-    return any(parsed_ip in network for network in EAGLENET_ALLOWLIST)
-
-
-def is_request_from_eaglenet(flask_request):
-    ip_address_str = extract_request_ip(flask_request)
-    return bool(ip_address_str and is_ip_allowlisted(ip_address_str))
-
-
-def parse_time_12h(timestr):
-    # Parse a 12-hour formatted time string into a datetime.time object.
-    timestr = timestr.strip().upper()
-    return datetime.datetime.strptime(timestr, "%I:%M%p").time()
-
-
-def parse_schedule(schedule_str):
-    """
-    Expects a schedule string like "MWF 8:30AM - 9:50AM"
-    The days like MWF are ignored.
-    Returns start_time and end_time as datetime.time objects.
-    """
-    parts = schedule_str.strip().split()
-    if parts and not any(char.isdigit() for char in parts[0]):
-        time_range_str = " ".join(parts[1:])
-    else:
-        time_range_str = " ".join(parts)
-
-    if "-" not in time_range_str:
-        return None, None
-
-    start_str, end_str = time_range_str.split("-", 1)
-    start_time = parse_time_12h(start_str)
-    end_time = parse_time_12h(end_str)
-    return start_time, end_time
-
-
-def get_attendance_status(now_dt, start_dt, end_dt):
-    # Students can start scanning their attendance 5 minutes before class starts
-    allowed_start = start_dt - datetime.timedelta(minutes=5)
-
-    if now_dt < allowed_start:
-        return None, "Attendance cannot be recorded before the allowed time."
-    if now_dt > end_dt:
-        return None, "Attendance cannot be recorded after the allowed time."
-
-    # With the updated logic, anything in the allowed window is "Present".
-    return "Present", None
-
-
-def _resolve_record_id(payload):
-    record_id = payload.get("recordId")
-    if record_id:
-        return record_id
-
-    class_id = payload.get("classId")
-    student_id = payload.get("studentId")
-    date_str = payload.get("date")
-
-    if class_id and student_id and date_str:
-        return f"{class_id}_{student_id}_{date_str}"
-
-    return None
-
-
-def _extract_bearer_token(header_value):
-    if not header_value:
+def _get_class_document(class_id):
+    """Fetch a class document by ID."""
+    class_ref = db.collection("classes").document(class_id)
+    class_doc = class_ref.get()
+    if not class_doc.exists:
         return None
-
-    parts = header_value.split()
-    if len(parts) != 2:
-        return None
-
-    scheme, token = parts
-    if scheme.lower() != "bearer":
-        return None
-
-    return token
+    data = class_doc.to_dict()
+    data["id"] = class_doc.id
+    return data
 
 
-def _perform_face_verification(captured_path, known_path, timeout=DEEPFACE_VERIFY_TIMEOUT_SECONDS):
-    """Run DeepFace.verify with a timeout to avoid long-running calls.
-
-    Uses a lighter model (Facenet512) to reduce memory usage.
-    """
-
-    def _verify():
-        return DeepFace.verify(
-            img1_path=captured_path,
-            img2_path=known_path,
-            model_name="Facenet512",  # lighter than VGG-Face
-            detector_backend="opencv",  # simple backend; we do our own detection
-            enforce_detection=False,
-        )
-
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(_verify)
-        return future.result(timeout=timeout)
-
-
-def _load_teacher_profile(decoded_token):
-    """Return the teacher's Firestore document ID and profile dict."""
-
-    teacher_uid = decoded_token.get("uid")
-    teacher_email = decoded_token.get("email")
-
+def _get_teacher_profile(teacher_id=None, teacher_email=None):
+    """Fetch minimal teacher profile for display."""
     users_collection = db.collection("users")
 
-    if teacher_uid:
+    if teacher_id:
         try:
-            doc_ref = users_collection.document(teacher_uid)
+            doc_ref = users_collection.document(teacher_id)
             snapshot = doc_ref.get()
         except Exception:
             snapshot = None
         else:
             if snapshot and getattr(snapshot, "exists", False):
                 profile = snapshot.to_dict() or {}
-                doc_id = getattr(snapshot, "id", None) or getattr(doc_ref, "id", None) or teacher_uid
+                doc_id = getattr(snapshot, "id", None) or getattr(doc_ref, "id", None) or teacher_id
                 return doc_id, profile
 
     if teacher_email:
@@ -254,392 +113,53 @@ def _load_teacher_profile(decoded_token):
         except Exception:
             snapshot = None
         else:
-            if snapshot is not None:
+            if snapshot and getattr(snapshot, "exists", False):
                 profile = snapshot.to_dict() or {}
-                doc_id = getattr(snapshot, "id", None) or teacher_uid or teacher_email
+                doc_id = getattr(snapshot, "id", None) or getattr(snapshot, "id", None)
                 return doc_id, profile
 
-    return None, {}
+    return None, None
 
 
-def _lookup_student_names(student_ids):
-    """Return a mapping of student ID to display name."""
-
-    users_collection = db.collection("users")
-    resolved = {}
-
-    for student_id in student_ids:
-        display_name = ""
-
-        try:
-            candidate_doc = users_collection.document(student_id).get()
-        except Exception:
-            candidate_doc = None
-
-        if candidate_doc and candidate_doc.exists:
-            candidate_data = candidate_doc.to_dict() or {}
-        else:
-            candidate_data = None
-            try:
-                query = users_collection.where("id", "==", student_id).limit(1)
-                candidate_doc = next(query.stream(), None)
-                if candidate_doc is not None:
-                    candidate_data = candidate_doc.to_dict() or {}
-            except Exception:
-                candidate_doc = None
-                candidate_data = None
-
-        if candidate_data:
-            first = str(candidate_data.get("fname", "")).strip()
-            last = str(candidate_data.get("lname", "")).strip()
-            display_name = " ".join(part for part in (first, last) if part)
-            if not display_name:
-                display_name = str(candidate_data.get("displayName", "")) or str(
-                    candidate_data.get("name", "")
-                )
-
-        if not display_name:
-            display_name = student_id
-
-        resolved[student_id] = display_name
-
-    return resolved
+def _get_attendance_collection():
+    return db.collection("attendance")
 
 
-@app.route("/api/attendance/export", methods=["GET"])
-def export_attendance():
-    class_id = (request.args.get("classId") or "").strip()
-    start_date_raw = (request.args.get("startDate") or "").strip()
-    end_date_raw = (request.args.get("endDate") or "").strip()
+def _fetch_pending_attendance_records(cutoff_minutes=PENDING_RECHECK_MINUTES):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cutoff = now - datetime.timedelta(minutes=cutoff_minutes)
 
-    if not class_id or not start_date_raw or not end_date_raw:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "classId, startDate, and endDate are required query parameters.",
-                }
-            ),
-            400,
-        )
-
-    try:
-        start_date = datetime.datetime.strptime(start_date_raw, "%Y-%m-%d").date()
-        end_date = datetime.datetime.strptime(end_date_raw, "%Y-%m-%d").date()
-    except ValueError:
-        return (
-            jsonify({"status": "error", "message": "Dates must be in YYYY-MM-DD format."}),
-            400,
-        )
-
-    if start_date > end_date:
-        return (
-            jsonify({"status": "error", "message": "startDate must be on or before endDate."}),
-            400,
-        )
-
-    bearer_token = _extract_bearer_token(request.headers.get("Authorization"))
-    if not bearer_token:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Missing or invalid Authorization header.",
-                }
-            ),
-            401,
-        )
-
-    try:
-        decoded_token = firebase_auth.verify_id_token(bearer_token)
-    except (
-        firebase_auth.InvalidIdTokenError,
-        firebase_auth.ExpiredIdTokenError,
-        firebase_auth.RevokedIdTokenError,
-        ValueError,
-    ):
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Authentication token is invalid or expired.",
-                }
-            ),
-            401,
-        )
-    except Exception:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Unable to verify authentication token.",
-                }
-            ),
-            401,
-        )
-
-    teacher_doc_id, teacher_profile = _load_teacher_profile(decoded_token)
-    if not teacher_doc_id:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Unable to locate teacher profile for the authenticated user.",
-                }
-            ),
-            403,
-        )
-
-    teacher_role = str(teacher_profile.get("role", "")).lower()
-    if teacher_role != "teacher":
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "You do not have permission to export attendance records.",
-                }
-            ),
-            403,
-        )
-
-    teacher_identifiers = {teacher_doc_id}
-    alternate_identifier = teacher_profile.get("id")
-    if alternate_identifier:
-        teacher_identifiers.add(str(alternate_identifier))
-
-    class_doc = db.collection("classes").document(class_id).get()
-    if not class_doc.exists:
-        return jsonify({"status": "error", "message": "Class not found."}), 404
-
-    class_data = class_doc.to_dict() or {}
-
-    assigned_teachers = set()
-    for key in ("teacher", "teacherId", "teacherID", "teachers"):
-        value = class_data.get(key)
-        if isinstance(value, str):
-            assigned_teachers.add(value)
-        elif isinstance(value, list):
-            assigned_teachers.update(str(item) for item in value if item)
-
-    if assigned_teachers and not (teacher_identifiers & assigned_teachers):
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "You are not assigned to this class.",
-                }
-            ),
-            403,
-        )
-
-    if not assigned_teachers:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "This class does not have an assigned teacher.",
-                }
-            ),
-            403,
-        )
-
-    start_dt = datetime.datetime.combine(start_date, datetime.time.min, tzinfo=CENTRAL_TZ)
-    end_dt = datetime.datetime.combine(end_date, datetime.time.max, tzinfo=CENTRAL_TZ)
-
-    try:
-        attendance_query = (
-            db.collection("attendance")
-            .where("classID", "==", class_id)
-            .where("date", ">=", start_dt)
-            .where("date", "<=", end_dt)
-        )
-        attendance_docs = list(attendance_query.stream())
-    except Exception as exc:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": f"Failed to fetch attendance records: {exc}",
-                }
-            ),
-            500,
-        )
-
-    attendance_records = []
-    student_ids = set()
-    for doc_snapshot in attendance_docs:
-        data = doc_snapshot.to_dict() or {}
-        attendance_records.append(data)
-        student_id = data.get("studentID") or data.get("studentId")
-        if student_id:
-            student_ids.add(str(student_id))
-
-    student_names = _lookup_student_names(student_ids) if student_ids else {}
-
-    def sort_key(record):
-        value = record.get("date")
-        if isinstance(value, datetime.datetime):
-            return value
-        if isinstance(value, datetime.date):
-            return datetime.datetime.combine(value, datetime.time.min)
-        if isinstance(value, str):
-            try:
-                return datetime.datetime.fromisoformat(value)
-            except ValueError:
-                return datetime.datetime.min
-        return datetime.datetime.min
-
-    attendance_records.sort(key=sort_key)
-
-    csv_header = [
-        "studentName",
-        "studentId",
-        "date",
-        "status",
-        "checkInAt",
-        "decidedAt",
-        "decisionMethod",
-    ]
-
-    def row_for_record(record):
-        student_id = str(record.get("studentID") or record.get("studentId") or "")
-        student_name = student_names.get(student_id, student_id)
-        date_value = record.get("date")
-        check_in_value = record.get("checkInAt") or record.get("createdAt") or date_value
-        decided_value = record.get("decidedAt") or record.get("finalizedAt") or record.get("updatedAt")
-        decision_method = record.get("decisionMethod") or record.get("decisionSource") or ""
-
-        return [
-            student_name,
-            student_id,
-            _to_central_date(date_value),
-            record.get("status", ""),
-            _to_central_iso(check_in_value),
-            _to_central_iso(decided_value),
-            decision_method,
-        ]
-
-    def generate():
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(csv_header)
-        yield output.getvalue()
-        output.seek(0)
-        output.truncate(0)
-
-        for record in attendance_records:
-            writer.writerow(row_for_record(record))
-            yield output.getvalue()
-            output.seek(0)
-            output.truncate(0)
-
-    filename = f"attendance-{class_id}-{start_date_raw}-to-{end_date_raw}.csv"
-    response = Response(stream_with_context(generate()), mimetype="text/csv")
-    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    response.headers["Cache-Control"] = "no-store"
-
-    return response
+    attendance_collection = _get_attendance_collection()
+    query = attendance_collection.where("isPending", "==", True).where("scanTimestamp", "<=", cutoff)
+    return list(query.stream())
 
 
-@app.route("/api/attendance/finalize", methods=["POST"])
-def finalize_attendance():
-    payload = request.get_json(silent=True) or {}
-    record_id = _resolve_record_id(payload)
+def _finalize_pending_record(record_snapshot):
+    record = record_snapshot.to_dict()
+    record_id = record_snapshot.id
 
-    if not record_id:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Missing attendance record identifier.",
-                }
-            ),
-            400,
-        )
-
-    attendance_ref = db.collection("attendance").document(record_id)
-    snapshot = attendance_ref.get()
-
-    if not snapshot.exists:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Pending attendance record not found.",
-                }
-            ),
-            404,
-        )
-
-    record = snapshot.to_dict() or {}
-
-    record_status = str(record.get("status", "")).lower()
-
-    if record_status != "pending":
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Pending attendance record has expired.",
-                }
-            ),
-            410,
-        )
-
-    pending_status = record.get("proposedStatus")
-    if pending_status is None:
-        pending_status = record.get("pendingStatus")
-
-    if pending_status not in {"Present", "Absent", "Late"}:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Pending attendance record is invalid.",
-                }
-            ),
-            400,
-        )
-
-    now_central = datetime.datetime.now(CENTRAL_TZ)
-
-    client_ip = get_client_ip(request)
-    if not is_ip_allowed(client_ip):
-        rejection_reason = "Follow-up request must originate from EagleNet."
-        updates = {
-            "status": "Rejected",
-            "rejectionReason": rejection_reason,
-            "finalizedAt": now_central,
-        }
-
-        for field in ("proposedStatus", "pendingStatus"):
-            if field in record:
-                updates[field] = firestore.DELETE_FIELD
-
-        if "isPending" in record:
-            updates["isPending"] = firestore.DELETE_FIELD
-
-        attendance_ref.update(updates)
-
-        return (
-            jsonify(
-                {
-                    "status": "rejected",
-                    "message": rejection_reason,
-                    "recordId": record_id,
-                }
-            ),
-            403,
-        )
+    scan_status = record.get("scanStatus")
+    pending_status = record.get("pendingStatus")
+    student_id = record.get("studentId") or record.get("studentID")
+    class_id = record.get("classId")
+    scan_timestamp = record.get("scanTimestamp")
 
     updates = {
-        "status": pending_status,
-        "finalizedAt": now_central,
+        "isPending": False,
+        "finalizedAt": datetime.datetime.now(datetime.timezone.utc),
     }
 
-    for field in ("proposedStatus", "pendingStatus"):
-        if field in record:
-            updates[field] = firestore.DELETE_FIELD
+    if pending_status == "present":
+        updates["scanStatus"] = "present"
+    elif pending_status == "absent":
+        updates["scanStatus"] = "absent"
+    else:
+        updates["scanStatus"] = scan_status or "unknown"
+
+    attendance_ref = _get_attendance_collection().document(record_id)
+
+    if "pendingStatus" in record:
+        updates["pendingStatus"] = firestore.DELETE_FIELD
 
     if "isPending" in record:
         updates["isPending"] = firestore.DELETE_FIELD
@@ -649,43 +169,130 @@ def finalize_attendance():
 
     attendance_ref.update(updates)
 
-    return (
-        jsonify(
-            {
-                "status": "success",
-                "message": "Attendance finalized.",
-                "recordId": record_id,
-                "finalStatus": pending_status,
-            }
-        ),
-        200,
-    )
+    return jsonify({
+        "status": "success",
+        "message": "Attendance finalized.",
+        "recordId": record_id,
+        "finalStatus": pending_status,
+    }), 200
+
+
+def _resolve_student_name(student_id):
+    """Resolve student display name from 'users' collection."""
+    if not student_id:
+        return None
+
+    try:
+        user_ref = db.collection("users").document(student_id)
+        user_snapshot = user_ref.get()
+        if user_snapshot.exists:
+            user_data = user_snapshot.to_dict() or {}
+            return user_data.get("name") or user_data.get("fullName") or user_data.get("displayName")
+    except Exception:
+        pass
+
+    return None
+
+
+def _create_attendance_record(student_id, class_id, scan_status, is_pending=False, pending_status=None, rejection_reason=None):
+    attendance_ref = _get_attendance_collection()
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    record_data = {
+        "studentId": student_id,
+        "classId": class_id,
+        "scanStatus": scan_status,
+        "scanTimestamp": now,
+        "isPending": is_pending,
+        "pendingStatus": pending_status,
+        "rejectionReason": rejection_reason,
+        "createdAt": now,
+        "updatedAt": now,
+    }
+
+    record_ref = attendance_ref.document()
+    record_ref.set(record_data)
+
+    record_data["id"] = record_ref.id
+    record_data["scanTimestampIso"] = _to_central_iso(now)
+
+    return record_data
+
+
+def _within_class_time_window(class_doc, scan_time=None):
+    """
+    Check if scan_time is within the scheduled class time frame.
+
+    We assume class_doc has fields:
+      - classStartTime (timestamp or datetime)
+      - classEndTime   (timestamp or datetime)
+    """
+    if not class_doc:
+        return False
+
+    start_time = class_doc.get("classStartTime")
+    end_time = class_doc.get("classEndTime")
+
+    if scan_time is None:
+        scan_time = datetime.datetime.now(datetime.timezone.utc)
+
+    def _to_dt(value):
+        if isinstance(value, datetime.datetime):
+            return value
+        if isinstance(value, datetime.date):
+            return datetime.datetime.combine(value, datetime.time.min, tzinfo=datetime.timezone.utc)
+        return None
+
+    start_dt = _to_dt(start_time)
+    end_dt = _to_dt(end_time)
+
+    if not start_dt or not end_dt:
+        return False
+
+    if start_dt.tzinfo is None:
+        start_dt = start_dt.replace(tzinfo=datetime.timezone.utc)
+    if end_dt.tzinfo is None:
+        end_dt = end_dt.replace(tzinfo=datetime.timezone.utc)
+
+    return start_dt <= scan_time <= end_dt
 
 
 def get_client_ip(req):
     """Extract the best-effort client IP address from the incoming request."""
+    # Prefer X-Forwarded-For if present (ngrok and proxies will set this)
     forwarded_for = req.headers.get("X-Forwarded-For", "")
     if forwarded_for:
         for part in forwarded_for.split(","):
             ip_candidate = part.strip()
             if ip_candidate:
                 return ip_candidate
+
+    # Some proxies use X-Real-IP
     real_ip = req.headers.get("X-Real-IP")
     if real_ip:
         return real_ip.strip()
+
+    # Fallback to the direct remote address
     return req.remote_addr
 
 
 def is_ip_allowed(ip_str):
+    """
+    Return True if the given IP string is in one of the allowed networks.
+
+    Allowed sources:
+      - UNT EagleNet ranges (see allowed_networks.py)
+      - Home LAN ranges (HOME_CIDR_STRINGS)
+    """
     if not ip_str:
         return False
     try:
         client_ip = ip_address(ip_str)
     except ValueError:
+        # Not a valid IP string
         return False
-    return any(client_ip in network for network in UNT_EAGLENET_NETWORKS) or any(
-        client_ip in network for network in EAGLENET_ALLOWLIST
-    )
+
+    return any(client_ip in network for network in ALLOWED_IP_NETWORKS)
 
 
 def _process_face_recognition_request():
@@ -705,236 +312,114 @@ def _process_face_recognition_request():
         # Download the known face image from storage
         blob = bucket.blob(f"known_faces/{student_id}.jpg")
         if not blob.exists():
-            return jsonify(
-                {"status": "error", "message": "No known face image found for this student."}
-            ), 404
+            return jsonify({"status": "error", "message": "No known face image found for this student."}), 404
         blob.download_to_filename(temp_known_path)
 
-        # Decode the base64 image
+        # Decode the base64 image and save it as the captured face
         image_data = base64.b64decode(image_b64.split(",")[1])
         np_arr = np.frombuffer(image_data, np.uint8)
         captured_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         if captured_img is None:
-            return jsonify(
-                {"status": "error", "message": "Captured image could not be decoded."}
-            ), 400
+            return jsonify({"status": "error", "message": "Captured image could not be decoded."}), 400
+        cv2.imwrite(temp_captured_path, captured_img)
 
-        # ---------- PRE-PROCESS: DOWNSCALE + FACE DETECTION ----------
-        max_dim = 640
-        h, w = captured_img.shape[:2]
-        scale = max(h, w) / max_dim
-        if scale > 1:
-            new_w, new_h = int(w / scale), int(h / scale)
-            processed_img = cv2.resize(captured_img, (new_w, new_h))
+        # Use DeepFace to verify the face
+        verify_result = DeepFace.verify(
+            img1_path=temp_captured_path,
+            img2_path=temp_known_path,
+            model_name="VGG-Face",
+            enforce_detection=False,
+        )
+
+        if not verify_result.get("verified", False):
+            return jsonify({"status": "fail", "message": "Face not recognized"}), 404
+
+        class_doc = _get_class_document(class_id)
+        if not class_doc:
+            return jsonify({"status": "error", "message": "Class not found."}), 404
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        is_within_window = _within_class_time_window(class_doc, scan_time=now)
+
+        if is_within_window:
+            record = _create_attendance_record(
+                student_id=student_id,
+                class_id=class_id,
+                scan_status="present",
+                is_pending=False,
+                pending_status=None,
+                rejection_reason=None,
+            )
+            return jsonify({
+                "status": "success",
+                "message": "Face recognized and attendance marked present.",
+                "record": record,
+            }), 200
         else:
-            processed_img = captured_img
-
-        # Face detection (cheap, filters out hands/objects)
-        gray = cv2.cvtColor(processed_img, cv2.COLOR_BGR2GRAY)
-        face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        )
-        faces = face_cascade.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(80, 80),
-        )
-
-        if len(faces) == 0:
-            return jsonify(
-                {
-                    "status": "fail",
-                    "message": "No face detected. Make sure your face is clearly visible to the camera.",
-                }
-            ), 400
-
-        # Save the processed image for DeepFace
-        cv2.imwrite(temp_captured_path, processed_img)
-
-        # ---------- FACIAL RECOGNITION WITH LIGHTER MODEL ----------
-        try:
-            verify_result = _perform_face_verification(
-                captured_path=temp_captured_path,
-                known_path=temp_known_path,
+            record = _create_attendance_record(
+                student_id=student_id,
+                class_id=class_id,
+                scan_status="pending",
+                is_pending=True,
+                pending_status="absent",
+                rejection_reason="Scan outside class time window",
             )
-        except FuturesTimeoutError:
-            return jsonify(
-                {"status": "error", "message": "Face verification timed out."}
-            ), 504
-        except Exception:
-            app.logger.exception("Face verification failed")
-            return jsonify(
-                {"status": "error", "message": "Face verification failed."}
-            ), 502
-
-        distance = verify_result.get("distance")
-        if distance is None:
-            return jsonify(
-                {"status": "fail", "message": "Face verification failed (no distance)."}
-            ), 400
-
-        # Strict cutoff for Facenet512 to avoid false positives (like hands)
-        INTERNAL_THRESHOLD = 0.30
-        if distance > INTERNAL_THRESHOLD or not verify_result.get("verified", False):
-            return jsonify(
-                {"status": "fail", "message": "Face not recognized"}
-            ), 404
-
-        # ---------- ATTENDANCE LOGIC (unchanged) ----------
-        now_central = datetime.datetime.now(CENTRAL_TZ)
-        today_str = now_central.strftime("%Y-%m-%d")
-        doc_id = f"{class_id}_{student_id}_{today_str}"
-
-        attendance_doc_ref = db.collection("attendance").document(doc_id)
-        attendance_doc = attendance_doc_ref.get()
-        if attendance_doc.exists:
-            existing_record = attendance_doc.to_dict() or {}
-            if existing_record.get("status") == "pending":
-                existing_recheck_due = existing_record.get("pendingRecheckAt")
-                if isinstance(existing_recheck_due, datetime.datetime):
-                    existing_recheck_due_iso = existing_recheck_due.isoformat()
-                else:
-                    existing_recheck_due_iso = None
-                return (
-                    jsonify(
-                        {
-                            "status": "pending",
-                            "message": "Attendance scan is pending verification. Please leave the webpage open until it is resolved.",
-                            "recognized_student": student_id,
-                            "pending": True,
-                            "proposed_attendance_status": existing_record.get(
-                                "proposedStatus"
-                            ),
-                            "recheck_due_at": existing_recheck_due_iso,
-                            "recordId": doc_id,
-                        }
-                    ),
-                    202,
-                )
-            return (
-                jsonify(
-                    {
-                        "status": "already_marked",
-                        "message": "Attendance already recorded today.",
-                    }
-                ),
-                200,
-            )
-
-        class_doc = db.collection("classes").document(class_id).get()
-        if not class_doc.exists:
-            return jsonify({"status": "error", "message": "Class not found"}), 404
-        class_data = class_doc.to_dict()
-        schedule_str = class_data.get("schedule", "").strip()
-        if not schedule_str:
-            return jsonify(
-                {"status": "error", "message": "No schedule defined for this class"}
-            ), 400
-
-        start_time, end_time = parse_schedule(schedule_str)
-        if not start_time or not end_time:
-            return jsonify(
-                {"status": "error", "message": "Invalid schedule format"}
-            ), 400
-
-        start_dt = datetime.datetime(
-            now_central.year,
-            now_central.month,
-            now_central.day,
-            start_time.hour,
-            start_time.minute,
-            0,
-            0,
-            tzinfo=CENTRAL_TZ,
-        )
-        end_dt = datetime.datetime(
-            now_central.year,
-            now_central.month,
-            now_central.day,
-            end_time.hour,
-            end_time.minute,
-            0,
-            0,
-            tzinfo=CENTRAL_TZ,
-        )
-
-        status, error_msg = get_attendance_status(now_central, start_dt, end_dt)
-        if error_msg:
-            return jsonify({"status": "fail", "message": error_msg}), 400
-
-        network_evidence = {
-            "remoteAddr": request.remote_addr,
-            "xForwardedFor": request.headers.get("X-Forwarded-For"),
-            "xRealIp": request.headers.get("X-Real-IP"),
-            "userAgent": request.headers.get("User-Agent"),
-            "forwardedProto": request.headers.get("X-Forwarded-Proto"),
-            "requestId": request.headers.get("X-Request-Id"),
-        }
-
-        pending_recheck_at = now_central + datetime.timedelta(
-            minutes=PENDING_RECHECK_MINUTES
-        )
-
-        attendance_record = {
-            "studentID": student_id,
-            "classID": class_id,
-            "date": now_central,
-            "status": "pending",
-            "isPending": True,
-            "proposedStatus": status,
-            "createdAt": firestore.SERVER_TIMESTAMP,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-            "pendingRecheckAt": pending_recheck_at,
-            "networkEvidence": network_evidence,
-            "verification": {
-                "distance": distance,
-                "threshold": INTERNAL_THRESHOLD,
-                "model": "Facenet512",
-            },
-        }
-        attendance_doc_ref.set(attendance_record)
-
-        response_payload = {
-            "status": "pending",
-            "recognized_student": student_id,
-            "pending": True,
-            "proposed_attendance_status": status,
-            "recheck_due_at": pending_recheck_at.isoformat(),
-            "recordId": doc_id,
-        }
-
-        return jsonify(response_payload), 202
+            return jsonify({
+                "status": "pending",
+                "message": "Scan outside of class time window. Attendance pending review.",
+                "record": record,
+            }), 200
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
     finally:
-        if os.path.exists(temp_captured_path):
-            os.remove(temp_captured_path)
-        if os.path.exists(temp_known_path):
-            os.remove(temp_known_path)
+        for path in (temp_captured_path, temp_known_path):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
 
 
 @app.route("/api/face-recognition", methods=["POST", "OPTIONS"])
 def face_recognition():
+    """
+    Entry point for face recognition.
+
+    Allowed sources:
+      - Requests coming through an ngrok tunnel (Host header contains "ngrok")
+      - Direct requests where the client IP is in ALLOWED_IP_NETWORKS
+        (UNT EagleNet or your home LAN ranges).
+    """
     if request.method == "OPTIONS":
+        # CORS preflight
         return "", 200
 
     client_ip = get_client_ip(request)
+    host_header = request.headers.get("Host", "") or request.host or ""
+
+    # Allow any request that has come through an ngrok tunnel.
+    if "ngrok" in host_header.lower():
+        app.logger.info(
+            "Allowing face recognition from ngrok host %s (client_ip=%s)",
+            host_header,
+            client_ip,
+        )
+        return _process_face_recognition_request()
+
+    # Otherwise, enforce strict IP allowlist (EagleNet + home LAN).
     if not is_ip_allowed(client_ip):
         app.logger.warning(
-            "Rejected face recognition request from unauthorized IP %s", client_ip
+            "Rejected face recognition request from unauthorized IP %s (Host=%s)",
+            client_ip,
+            host_header,
         )
-        return (
-            jsonify(
-                {
-                    "status": "forbidden",
-                    "message": "Access denied: client IP is not authorized to use this service.",
-                }
-            ),
-            403,
-        )
+        return jsonify(
+            {
+                "status": "forbidden",
+                "message": "Access denied: client IP is not authorized to use this service.",
+            }
+        ), 403
 
     return _process_face_recognition_request()
 

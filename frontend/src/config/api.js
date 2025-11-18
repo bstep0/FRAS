@@ -1,21 +1,36 @@
-const FALLBACK_API_BASE = "https://facialrecognitionattendancesystem.onrender.com";
+// Backend configuration for AttendU
+// ---------------------------------
+// Default: use your desktop backend on your home network (LAN).
+// Override: if localStorage.apiBase is set in the browser, use that instead.
+//   - This lets your campus laptop use an ngrok URL WITHOUT redeploying.
+//   - Your home machines keep using the LAN IP by default.
 
-const rawBase =
-  (process.env.REACT_APP_API_BASE || process.env.VITE_API_BASE || FALLBACK_API_BASE).trim();
+// 1) Default backend base URL (home desktop on LAN)
+const DEFAULT_API_BASE = "http://192.168.1.70:5000"; // update if your LAN IP changes
 
-const trimmedBase = rawBase.replace(/\/$/, "");
-const faceRecognitionSuffix = "/api/face-recognition";
+// 2) Resolve the active base URL
+function resolveApiBase() {
+  // In the browser, allow a local override via localStorage
+  if (typeof window !== "undefined" && window.localStorage) {
+    const stored = window.localStorage.getItem("apiBase");
+    if (stored && typeof stored === "string" && stored.trim().length > 0) {
+      return stored.replace(/\/$/, ""); // strip trailing slash
+    }
+  }
 
-let apiBase = trimmedBase;
-if (trimmedBase.endsWith(faceRecognitionSuffix)) {
-  apiBase = trimmedBase.slice(0, -faceRecognitionSuffix.length);
+  // Fallback: use the LAN backend
+  return DEFAULT_API_BASE.replace(/\/$/, "");
 }
 
-export const API_BASE = apiBase;
+const API_BASE = resolveApiBase();
+
+// 3) Endpoints
 export const FACE_RECOGNITION_ENDPOINT = `${API_BASE}/api/face-recognition`;
 export const FINALIZE_ATTENDANCE_ENDPOINT = `${API_BASE}/api/attendance/finalize`;
 export const EXPORT_ATTENDANCE_ENDPOINT = `${API_BASE}/api/attendance/export`;
-export const PENDING_VERIFICATION_MINUTES = 1; // change this for testing (e.g., 0.1 or 1)
+
+// How long the frontend treats a scan as "pending" (minutes)
+export const PENDING_VERIFICATION_MINUTES = 1;
 
 export default {
   API_BASE,
