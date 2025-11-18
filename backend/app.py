@@ -681,17 +681,14 @@ def _process_face_recognition_request():
             )
         except (TimeoutError, concurrent.futures.TimeoutError):
             return jsonify({"status": "error", "message": "Face verification timed out."}), 504
-        except Exception:
+        except Exception as exc:
             app.logger.exception("Face verification failed")
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "message": f"Face verification failed: {exc}",
-                    }
-                ),
-                502,
-            )
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": f"Face verification failed: {exc}",
+                }
+            ), 502
 
         distance = verify_result.get("distance")
         if distance is None:
