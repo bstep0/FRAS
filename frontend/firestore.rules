@@ -6,9 +6,35 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function lowerAuthEmail() {
+      return request.auth != null && request.auth.token.email != null
+        ? lower(request.auth.token.email)
+        : null;
+    }
+
+    function userDocument() {
+      if (!isSignedIn()) {
+        return null;
+      }
+
+      let uidDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      if (uidDoc != null && uidDoc.data != null) {
+        return uidDoc.data;
+      }
+
+      let authEmail = lowerAuthEmail();
+      if (authEmail == null) {
+        return null;
+      }
+
+      let emailDoc = get(/databases/$(database)/documents/users/$(authEmail));
+      return emailDoc != null ? emailDoc.data : null;
+    }
+
     function authRole() {
-      return request.auth != null && request.auth.token.role is string
-        ? lower(request.auth.token.role)
+      let userDoc = userDocument();
+      return userDoc != null && userDoc.role is string
+        ? lower(userDoc.role)
         : null;
     }
 
@@ -26,12 +52,6 @@ service cloud.firestore {
 
     function staffCanAccess() {
       return isSignedIn() && (isAdmin() || isTeacher());
-    }
-
-    function lowerAuthEmail() {
-      return request.auth != null && request.auth.token.email != null
-        ? lower(request.auth.token.email)
-        : null;
     }
 
     function hasNotificationAccess(resourceData) {
