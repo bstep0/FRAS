@@ -510,7 +510,8 @@ def finalize_attendance():
 
     now_central = datetime.datetime.now(CENTRAL_TZ)
 
-    if not is_request_from_eaglenet(request):
+    client_ip = get_client_ip(request)
+    if not is_ip_allowed(client_ip):
         rejection_reason = "Follow-up request must originate from EagleNet."
         updates = {
             "status": "Rejected",
