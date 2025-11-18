@@ -2,12 +2,17 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { useNotifications } from "../context/NotificationsContext";
 import ClassAttendanceChart from "./ClassAttendanceChart";
 import { EXPORT_ATTENDANCE_ENDPOINT } from "../config/api";
 import TeacherLayout from "./TeacherLayout";
+import {
+  collectStudentIds,
+  extractStudentId,
+  fetchAttendanceDocuments,
+} from "../utils/attendanceQueries";
 
 const formatDateLabel = (date) =>
   date.toLocaleDateString("en-US", {
@@ -228,22 +233,9 @@ const TeacherClassView = () => {
     }
 
     try {
-      const attendanceRef = collection(db, "attendance");
-      const attendanceQuery = query(attendanceRef, where("classID", "==", classId));
-      const attendanceSnapshot = await getDocs(attendanceQuery);
+      const rawRecords = await fetchAttendanceDocuments(db, classId);
 
-      const rawRecords = attendanceSnapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...docSnapshot.data(),
-      }));
-
-      const studentIds = [
-        ...new Set(
-          rawRecords
-            .map((record) => record.studentID)
-            .filter((studentId) => Boolean(studentId))
-        ),
-      ];
+      const studentIds = collectStudentIds(rawRecords);
 
       const studentMap = new Map();
       studentIds.forEach((studentId) => {
@@ -279,19 +271,21 @@ const TeacherClassView = () => {
       );
 
       const enrichedRecords = rawRecords.map((record) => {
-        const studentData = studentMap.get(record.studentID) || rosterMap.get(record.studentID);
+        const recordStudentId = extractStudentId(record);
+        const studentData =
+          studentMap.get(recordStudentId) || rosterMap.get(recordStudentId);
         const studentName = resolveStudentName(
           studentData,
           record.studentName || record.studentFullName,
-          record.studentID
+          recordStudentId
         );
 
         const studentWithName = studentData
           ? studentData.name
             ? studentData
             : { ...studentData, name: studentName }
-          : record.studentID
-          ? { id: record.studentID, name: studentName }
+          : recordStudentId
+          ? { id: recordStudentId, name: studentName }
           : null;
 
         const dateValue = coerceToDate(record.date);

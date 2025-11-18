@@ -5,7 +5,6 @@ import {
   deleteDoc,
   doc,
   getDoc,
-  getDocs,
   query,
   serverTimestamp,
   setDoc,
@@ -17,6 +16,7 @@ import ClassAttendanceChart from "./ClassAttendanceChart";
 import TeacherLayout from "./TeacherLayout";
 import { useNotifications } from "../context/NotificationsContext";
 import { auth, db } from "../firebaseConfig";
+import { fetchAttendanceDocuments } from "../utils/attendanceQueries";
 
 const formatDateLabel = (date) =>
   date.toLocaleDateString("en-US", {
@@ -185,18 +185,7 @@ const TeacherStudentAttendance = () => {
     setIsLoading(true);
 
     try {
-      const attendanceRef = collection(db, "attendance");
-      const attendanceQuery = query(
-        attendanceRef,
-        where("classID", "==", classId),
-        where("studentID", "==", studentId)
-      );
-      const attendanceSnapshot = await getDocs(attendanceQuery);
-
-      const records = attendanceSnapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...docSnapshot.data(),
-      }));
+      const records = await fetchAttendanceDocuments(db, classId, studentId);
 
       records.sort((a, b) => {
         const aDate = coerceToDate(a.date) || new Date(0);
