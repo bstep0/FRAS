@@ -142,3 +142,46 @@ def test_home_cidr_can_be_overridden(monkeypatch, app_module):
     finally:
         monkeypatch.delenv("HOME_CIDR_STRINGS", raising=False)
         app_module.refresh_allowed_networks()
+
+
+def _post_for_cors_header(app_module, origin, monkeypatch):
+    monkeypatch.setattr(
+        app_module,
+        "_process_face_recognition_request",
+        lambda: (app_module.jsonify({"status": "ok"}), 200),
+    )
+
+    client = app_module.app.test_client()
+    return client.post(
+        "/api/face-recognition",
+        json={},
+        headers={"Origin": origin, "Host": "demo.ngrok-free.app"},
+    )
+
+
+def test_cors_echoes_allowed_production_origin(app_module, monkeypatch):
+    response = _post_for_cors_header(app_module, app_module.PRODUCTION_ORIGIN, monkeypatch)
+
+    assert response.headers.get("Access-Control-Allow-Origin") == app_module.PRODUCTION_ORIGIN
+    assert "Origin" in response.headers.get("Vary", "")
+
+
+def test_cors_allows_ngrok_origin(app_module, monkeypatch):
+    origin = "https://demo.ngrok-free.app"
+    response = _post_for_cors_header(app_module, origin, monkeypatch)
+
+    assert response.headers.get("Access-Control-Allow-Origin") == origin
+
+
+def test_cors_allows_home_network_origin(app_module, monkeypatch):
+    origin = "http://192.168.1.70:5173"
+    response = _post_for_cors_header(app_module, origin, monkeypatch)
+
+    assert response.headers.get("Access-Control-Allow-Origin") == origin
+
+
+def test_cors_falls_back_for_unexpected_origin(app_module, monkeypatch):
+    origin = "https://malicious.example.com"
+    response = _post_for_cors_header(app_module, origin, monkeypatch)
+
+    assert response.headers.get("Access-Control-Allow-Origin") == app_module.PRODUCTION_ORIGIN
