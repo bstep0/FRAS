@@ -5,6 +5,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import StudentLayout from "./StudentLayout";
 import { useNotifications } from "../context/NotificationsContext";
+import { fetchAttendanceDocuments } from "../utils/attendanceQueries";
 
 const statusStyles = {
   Present: {
@@ -78,20 +79,9 @@ const StudentClassView = () => {
         const studentDoc = userSnapshot.docs[0];
         const studentId = studentDoc.id;
 
-        const attendanceRef = collection(db, "attendance");
-        const attendanceQuery = query(
-          attendanceRef,
-          where("classID", "==", classId),
-          where("studentID", "==", studentId)
-        );
-        const attendanceSnapshot = await getDocs(attendanceQuery);
+        const records = await fetchAttendanceDocuments(db, classId, studentId);
 
         if (!isMounted) return;
-
-        const records = [];
-        attendanceSnapshot.forEach((docSnapshot) => {
-          records.push(docSnapshot.data());
-        });
 
         setAttendanceRecords(records);
       } catch (error) {
