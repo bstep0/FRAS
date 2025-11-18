@@ -9,6 +9,7 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 import ipaddress
 import os
 from deepface import DeepFace
+import concurrent.futures
 from zoneinfo import ZoneInfo
 import csv
 import io
@@ -55,6 +56,42 @@ ALLOWED_IP_NETWORKS = _load_allowed_networks()
 
 
 app = Flask(__name__)
+
+
+def _perform_face_verification(
+    captured_path, known_path, model_name="VGG-Face", timeout_seconds=15
+):
+    """
+    Run DeepFace.verify with a timeout and return a structured response.
+
+    Returns a dictionary containing verified, distance, and max_threshold_to_verify
+    fields from the DeepFace response.
+    """
+
+    def _verify():
+        return DeepFace.verify(
+            img1_path=captured_path,
+            img2_path=known_path,
+            model_name=model_name,
+            enforce_detection=False,
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_verify)
+        try:
+            result = future.result(timeout=timeout_seconds)
+        except concurrent.futures.TimeoutError as exc:  # pragma: no cover - timeout path
+            future.cancel()
+            raise TimeoutError("Face verification timed out") from exc
+
+    if not isinstance(result, dict):
+        raise ValueError("Face verification returned an unexpected result")
+
+    return {
+        "verified": bool(result.get("verified", False)),
+        "distance": result.get("distance"),
+        "max_threshold_to_verify": result.get("max_threshold_to_verify"),
+    }
 
 
 @app.after_request
@@ -643,22 +680,11 @@ def _process_face_recognition_request():
         # ---------- Facial recognition with VGG-Face ----------
         try:
             verify_result = _perform_face_verification(
-                img1_path=temp_captured_path,
-                img2_path=temp_known_path,
-                model_name="VGG-Face",
-                enforce_detection=False,
+                temp_captured_path, temp_known_path, timeout_seconds=15
             )
-        except FuturesTimeoutError:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "message": "Face verification timed out. Please try again.",
-                    }
-                ),
-                504,
-            )
-        except Exception as exc:  # pragma: no cover - defensive
+        except (TimeoutError, concurrent.futures.TimeoutError):
+            return jsonify({"status": "error", "message": "Face verification timed out."}), 504
+        except Exception:
             app.logger.exception("Face verification failed")
             return (
                 jsonify(
@@ -677,7 +703,7 @@ def _process_face_recognition_request():
             ), 400
 
         # Threshold for VGG-Face – tune this if needed
-        INTERNAL_THRESHOLD = 0.35
+        INTERNAL_THRESHOLD = verify_result.get("max_threshold_to_verify") or 0.35
         if distance > INTERNAL_THRESHOLD or not verify_result.get("verified", False):
             return jsonify(
                 {"status": "fail", "message": "Face not recognized"}
@@ -839,7 +865,7 @@ def face_recognition():
         return "", 200
 
     client_ip = get_client_ip(request)
-    host_header = request.headers.get("Host", "") or getattr(request, "host", "") or ""
+    host_header = request.headers.get("Host", "") or getattr(request, "host", "")
 
     # Allow any request that has come through an ngrok tunnel.
     if "ngrok" in host_header.lower():
