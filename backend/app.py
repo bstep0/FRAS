@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, Response, stream_with_context
 import base64
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import cv2
 import numpy as np
 import firebase_admin
@@ -48,6 +49,7 @@ CENTRAL_TZ = ZoneInfo("America/Chicago")
 # How long pending records should wait before recheck (for logging & UI)
 # You can change this for testing, or set env var PENDING_VERIFICATION_MINUTES.
 PENDING_RECHECK_MINUTES = int(os.environ.get("PENDING_VERIFICATION_MINUTES", "45"))
+DEEPFACE_VERIFY_TIMEOUT_SECONDS = int(os.environ.get("DEEPFACE_VERIFY_TIMEOUT_SECONDS", "15"))
 
 
 def _to_central_iso(timestamp_like):
@@ -198,6 +200,22 @@ def _extract_bearer_token(header_value):
         return None
 
     return token
+
+
+def _perform_face_verification(captured_path, known_path, timeout=DEEPFACE_VERIFY_TIMEOUT_SECONDS):
+    """Run DeepFace.verify with a timeout to avoid long-running calls."""
+
+    def _verify():
+        return DeepFace.verify(
+            img1_path=captured_path,
+            img2_path=known_path,
+            model_name="VGG-Face",
+            enforce_detection=False,
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_verify)
+        return future.result(timeout=timeout)
 
 
 def _load_teacher_profile(decoded_token):
@@ -500,7 +518,7 @@ def finalize_attendance():
     if pending_status is None:
         pending_status = record.get("pendingStatus")
 
-    if pending_status not in {"Present", "Absent"}:
+    if pending_status not in {"Present", "Absent", "Late"}:
         return jsonify({
             "status": "error",
             "message": "Pending attendance record is invalid."
@@ -578,7 +596,10 @@ def is_ip_allowed(ip_str):
         client_ip = ip_address(ip_str)
     except ValueError:
         return False
-    return any(client_ip in network for network in UNT_EAGLENET_NETWORKS)
+    return (
+        any(client_ip in network for network in UNT_EAGLENET_NETWORKS)
+        or any(client_ip in network for network in EAGLENET_ALLOWLIST)
+    )
 
 
 def _process_face_recognition_request():
@@ -611,25 +632,17 @@ def _process_face_recognition_request():
         cv2.imwrite(temp_captured_path, captured_img)
 
         # Use DeepFace to verify the face. Compare the captured face with the known face downloaded from storage
-        """
-        print("Running DeepFace.verify...")
-        verify_result = DeepFace.verify(
-            img1_path=temp_captured_path,
-            img2_path=temp_known_path,
-            model_name="VGG-Face",
-            enforce_detection=False
-        )
-        print("DeepFace.verify completed.")
-        """
-        # Verified result for testing purposes
-        # Uncomment the above DeepFace.verify code and comment the below lines for real scan
-        verify_result = {
-            "verified": True,
-            "distance": 0.12,
-            "max_threshold_to_verify": 0.3
-        }
+        try:
+            verify_result = _perform_face_verification(
+                captured_path=temp_captured_path,
+                known_path=temp_known_path,
+            )
+        except FuturesTimeoutError:
+            return jsonify({"status": "error", "message": "Face verification timed out."}), 504
+        except Exception:
+            app.logger.exception("Face verification failed")
+            return jsonify({"status": "error", "message": "Face verification failed."}), 502
 
-        print("DeepFace verify result:", verify_result)
         if not verify_result.get("verified", False):
             return jsonify({"status": "fail", "message": "Face not recognized"}), 404
 
