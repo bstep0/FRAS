@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { auth, db } from "../firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import StudentLayout from "./StudentLayout";
 import { useNotifications } from "../context/NotificationsContext";
@@ -30,7 +31,21 @@ const StudentClassView = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const { pushToast } = useNotifications();
-  const user = auth.currentUser;
+  const [user, setUser] = useState(() => auth.currentUser);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!isMounted) return;
+      setUser(firebaseUser);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;

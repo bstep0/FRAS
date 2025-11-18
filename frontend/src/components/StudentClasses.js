@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { Link } from "react-router-dom";
 import { auth, db } from "../firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
 import StudentLayout from "./StudentLayout";
 import { useNotifications } from "../context/NotificationsContext";
 
@@ -9,7 +10,21 @@ const StudentClasses = () => {
   const [classes, setClasses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const { pushToast } = useNotifications();
-  const user = auth.currentUser;
+  const [user, setUser] = useState(() => auth.currentUser);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!isMounted) return;
+      setUser(firebaseUser);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
