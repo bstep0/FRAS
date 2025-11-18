@@ -217,27 +217,16 @@ export const NotificationsProvider = ({ children }) => {
     aggregatedSnapshotsRef.current = new Map();
   }, [currentUser, userDocId, userRole]);
 
-  const audienceValues = useMemo(() => {
-    const values = new Set(["all", "everyone", "public"]);
-
-    if (userRole) {
-      values.add(userRole);
-      values.add(`${userRole}s`);
+  const targetValues = useMemo(() => {
+    const values = new Set();
+    if (currentUser?.uid) {
+      values.add(currentUser.uid);
     }
-
-    const email = currentUser?.email || "";
-    if (email.includes("@my.unt.edu")) {
-      values.add("student");
-      values.add("students");
+    if (currentUser?.email) {
+      values.add(currentUser.email.toLowerCase());
     }
-    if (email.includes("@unt.edu")) {
-      values.add("teacher");
-      values.add("teachers");
-      values.add("faculty");
-    }
-
-    return Array.from(values).filter(Boolean);
-  }, [currentUser, userRole]);
+    return Array.from(values);
+  }, [currentUser]);
 
   useEffect(() => {
     const notificationsRef = collection(db, "notifications");
@@ -283,29 +272,9 @@ export const NotificationsProvider = ({ children }) => {
       }
     };
 
-    const generalAudiences = audienceValues.slice(0, 10);
-    if (generalAudiences.length) {
-      subscribeToConstraints(where("audience", "in", generalAudiences));
-      subscribeToConstraints(where("audiences", "array-contains-any", generalAudiences));
-    }
-
-    if (currentUser) {
-      const idCandidates = Array.from(
-        new Set([
-          userDocId,
-          currentUser?.uid || null,
-        ].filter(Boolean))
-      );
-
-      if (idCandidates.length > 0) {
-        subscribeToConstraints(
-          where("userId", "in", idCandidates.slice(0, 10))
-        );
-      }
-
-      if (currentUser.email) {
-        subscribeToConstraints(where("userEmail", "==", currentUser.email));
-      }
+    const targets = targetValues.slice(0, 10);
+    if (targets.length) {
+      subscribeToConstraints(where("targets", "array-contains-any", targets));
     }
 
     if (!hasSubscription) {
@@ -319,7 +288,7 @@ export const NotificationsProvider = ({ children }) => {
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-  }, [currentUser, userDocId, audienceValues]);
+  }, [currentUser, targetValues]);
 
   const markAsRead = useCallback(
     async (notificationId) => {
@@ -334,7 +303,10 @@ export const NotificationsProvider = ({ children }) => {
 
       try {
         const notificationRef = doc(db, "notifications", notificationId);
-        await updateDoc(notificationRef, { read: true });
+        await updateDoc(notificationRef, {
+          read: true,
+          updatedAt: serverTimestamp(),
+        });
       } catch (error) {
         console.error("Failed to mark notification as read", error);
       }
@@ -354,7 +326,10 @@ export const NotificationsProvider = ({ children }) => {
     try {
       const batch = writeBatch(db);
       unread.forEach((notification) => {
-        batch.update(doc(db, "notifications", notification.id), { read: true });
+        batch.update(doc(db, "notifications", notification.id), {
+          read: true,
+          updatedAt: serverTimestamp(),
+        });
       });
       await batch.commit();
     } catch (error) {
@@ -392,11 +367,15 @@ export const NotificationsProvider = ({ children }) => {
         notificationPayload.targetRole = userRole;
       }
 
+      notificationPayload.targets = targetValues.length
+        ? targetValues
+        : [currentUser?.uid, currentUser?.email?.toLowerCase()].filter(Boolean);
+
       const notificationRef = collection(db, "notifications");
       const docRef = await addDoc(notificationRef, notificationPayload);
       return docRef.id;
     },
-    [currentUser, userDocId, userRole]
+    [currentUser, userDocId, userRole, targetValues]
   );
 
   const bannerNotification = useMemo(() => {
