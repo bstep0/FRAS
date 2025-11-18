@@ -11,6 +11,7 @@ const StudentClasses = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { pushToast } = useNotifications();
   const [user, setUser] = useState(() => auth.currentUser);
+  const teacherProfileCache = useRef(new Map());
 
   useEffect(() => {
     let isMounted = true;
