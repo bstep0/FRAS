@@ -7,7 +7,7 @@ const PrivacyPolicy = () => {
       <div className="mx-auto max-w-4xl px-6 py-12 space-y-6">
         <header className="space-y-2">
           <p className="text-sm font-semibold uppercase tracking-wide text-unt-green">
-            Student Privacy
+            Privacy Policy
           </p>
           <h1 className="text-3xl font-bold">Privacy Policy</h1>
           <p className="text-slate-600">
@@ -56,15 +56,6 @@ const PrivacyPolicy = () => {
             registrar.
           </p>
         </section>
-
-        <div className="flex flex-wrap gap-3">
-          <Link to="/" className="brand-button">
-            Return to Login
-          </Link>
-          <Link to="/student" className="brand-button--ghost">
-            Go to Student Dashboard
-          </Link>
-        </div>
       </div>
     </div>
   );

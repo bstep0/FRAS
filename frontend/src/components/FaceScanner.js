@@ -266,6 +266,7 @@ const FaceScanner = ({ selectedClass, studentId }) => {
       }
 
       if (result.status === "success") {
+        // Currently not used by the backend, but kept for future flexibility
         stopVideo();
         setNotification({
           type: "success",
@@ -283,8 +284,15 @@ const FaceScanner = ({ selectedClass, studentId }) => {
         navigationTimeoutRef.current = setTimeout(() => {
           navigate(`/student/classes/${selectedClass}`, { replace: true });
         }, 2000);
-      } else if (result.status === "pending" && result.record_id) {
-        beginPendingFlow(result.record_id);
+      } else if (result.status === "pending" && result.recordId) {
+        beginPendingFlow(result.recordId);
+      } else if (result.status === "pending" && !result.recordId) {
+        // Safety net: pending without recordId should not normally happen
+        setNotification({
+          type: "error",
+          message:
+            "Your scan is pending, but we could not start the verification timer. Please try scanning again.",
+        });
       } else {
         setNotification({
           type: "error",

@@ -126,17 +126,18 @@ def is_request_from_eaglenet(flask_request):
     ip_address = extract_request_ip(flask_request)
     return bool(ip_address and is_ip_allowlisted(ip_address))
 
+
 def parse_time_12h(timestr):
-    
     # Parse a 12-hour formatted time string into a datetime.time object.
     timestr = timestr.strip().upper()
     return datetime.datetime.strptime(timestr, "%I:%M%p").time()
+
 
 def parse_schedule(schedule_str):
     """
     Expects a schedule string like "MWF 8:30AM - 9:50AM"
     The days like MWF are ignored
-    Returns start_time and  end_time as datetime.time objects
+    Returns start_time and end_time as datetime.time objects
     """
     parts = schedule_str.strip().split()
     if parts and not any(char.isdigit() for char in parts[0]):
@@ -150,6 +151,7 @@ def parse_schedule(schedule_str):
     end_time = parse_time_12h(end_str)
     return start_time, end_time
 
+
 def get_attendance_status(now_dt, start_dt, end_dt):
     # Students can start scanning their attendance 5 minutes before class starts
     allowed_start = start_dt - datetime.timedelta(minutes=5)
@@ -157,9 +159,9 @@ def get_attendance_status(now_dt, start_dt, end_dt):
     present_cutoff = start_dt + datetime.timedelta(minutes=15)
     
     if now_dt < allowed_start:
-        return None, "Attendance cannot be recorded before the allowed time." # If attempted before allowed time
+        return None, "Attendance cannot be recorded before the allowed time."
     if now_dt > end_dt:
-        return None, "Attendance cannot be recorded after the allowed time." # If attempted after class end time
+        return None, "Attendance cannot be recorded after the allowed time."
     if now_dt <= present_cutoff:
         return "Present", None
     else:
@@ -550,7 +552,8 @@ def finalize_attendance():
         "recordId": record_id,
         "finalStatus": pending_status,
     }), 200
-     
+
+
 def get_client_ip(req):
     """Extract the best-effort client IP address from the incoming request."""
     forwarded_for = req.headers.get("X-Forwarded-For", "")
@@ -573,6 +576,7 @@ def is_ip_allowed(ip_str):
     except ValueError:
         return False
     return any(client_ip in network for network in UNT_EAGLENET_NETWORKS)
+
 
 def _process_face_recognition_request():
     # Temporary filenames for the captured face and the known face downloaded from storage
@@ -607,19 +611,19 @@ def _process_face_recognition_request():
         """
         print("Running DeepFace.verify...")
         verify_result = DeepFace.verify(
-        img1_path=temp_captured_path,
-        img2_path=temp_known_path,
-        model_name="VGG-Face",
-        enforce_detection=False
+            img1_path=temp_captured_path,
+            img2_path=temp_known_path,
+            model_name="VGG-Face",
+            enforce_detection=False
         )
         print("DeepFace.verify completed.")
         """
         # Verified result for testing purposes
         # Uncomment the above DeepFace.verify code and comment the below lines for real scan
         verify_result = {
-        "verified": True,
-        "distance": 0.12,
-        "max_threshold_to_verify": 0.3
+            "verified": True,
+            "distance": 0.12,
+            "max_threshold_to_verify": 0.3
         }
 
         print("DeepFace verify result:", verify_result)
@@ -644,11 +648,12 @@ def _process_face_recognition_request():
                     existing_recheck_due_iso = None
                 return jsonify({
                     "status": "pending",
-                    "message": "Attendance scan is awaiting manual verification.",
+                    "message": "Attendance scan is pending verification. Please leave the webpage open until it is resolved.",
                     "recognized_student": student_id,
                     "pending": True,
                     "proposed_attendance_status": existing_record.get("proposedStatus"),
                     "recheck_due_at": existing_recheck_due_iso,
+                    "recordId": doc_id,
                 }), 202
             return jsonify({"status": "already_marked", "message": "Attendance already recorded today."}), 200
 
@@ -719,6 +724,7 @@ def _process_face_recognition_request():
             "pending": True,
             "proposed_attendance_status": status,
             "recheck_due_at": pending_recheck_at.isoformat(),
+            "recordId": doc_id,
         }
 
         # Inform the frontend that the scan is pending manual follow-up
@@ -749,6 +755,7 @@ def face_recognition():
         }), 403
 
     return _process_face_recognition_request()
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
