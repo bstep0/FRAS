@@ -25,11 +25,11 @@ except ImportError:  # pragma: no cover - fallback for script execution
 # ------------------------------
 # Network allowlist configuration
 # ------------------------------
-# Home LAN networks are intentionally narrow. Override HOME_CIDR_STRINGS or
-# HOME_CIDRS with a comma-separated list (e.g., "192.168.1.70/32,2600:abcd::/64")
-# when running demos off-campus. Production should rely on the UNT EagleNet
-# ranges from allowed_networks.py.
-DEFAULT_HOME_CIDR_STRINGS = ("192.168.1.70/32",)
+# Home LAN networks default to the full 192.168.0.0/16 range. Override
+# HOME_CIDR_STRINGS or HOME_CIDRS with a comma-separated list (e.g.,
+# "192.168.1.0/24,2600:abcd::/64") when running demos off-campus. Production
+# should rely on the UNT EagleNet ranges from allowed_networks.py.
+DEFAULT_HOME_CIDR_STRINGS = ("192.168.0.0/16",)
 
 
 def _get_home_cidr_strings():
@@ -390,7 +390,7 @@ def is_ip_allowed(ip_str):
 
     Allowed sources:
       - UNT EagleNet ranges (see allowed_networks.py)
-      - Home LAN ranges (HOME_CIDR_STRINGS/HOME_CIDRS; defaults to 192.168.1.70/32)
+      - Home LAN ranges (HOME_CIDR_STRINGS/HOME_CIDRS; defaults to 192.168.0.0/16)
     """
     if not ip_str:
         return False
@@ -431,7 +431,9 @@ def finalize_attendance():
 
     client_ip = get_client_ip(request)
     if not is_ip_allowed(client_ip):
-        rejection_reason = "Follow-up request must originate from EagleNet."
+        rejection_reason = (
+            "Follow-up request must originate from EagleNet or an authorized home network."
+        )
         updates.update({
             "status": "Rejected",
             "rejectionReason": rejection_reason,
