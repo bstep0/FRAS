@@ -25,21 +25,14 @@ const FaceScanner = ({ selectedClass, studentId }) => {
   const navigationTimeoutRef = useRef(null);
   const isMountedRef = useRef(false);
 
-  const getInitialConsent = () => {
-    if (typeof window === "undefined") return false;
-    return sessionStorage.getItem("faceScannerConsent") === "true";
-  };
-
-  const initialConsent = getInitialConsent();
-
   const [scanning, setScanning] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isPending, setIsPending] = useState(false);
   const [captureDisabled, setCaptureDisabled] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(null);
-  const [hasConsented, setHasConsented] = useState(initialConsent);
+  const [hasConsented, setHasConsented] = useState(false);
   const [consentError, setConsentError] = useState(
-    initialConsent ? "" : "Please agree to the privacy policy to enable scanning."
+    "Please agree to the privacy policy to enable scanning."
   );
 
   const clearPendingTimers = useCallback(() => {
@@ -132,11 +125,6 @@ const FaceScanner = ({ selectedClass, studentId }) => {
       stopVideo();
     };
   }, [startVideo, stopVideo, clearPendingTimers]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    sessionStorage.setItem("faceScannerConsent", hasConsented ? "true" : "false");
-  }, [hasConsented]);
 
   const finalizeAttendance = useCallback(
     async (recordId) => {
@@ -370,6 +358,10 @@ const FaceScanner = ({ selectedClass, studentId }) => {
                 setHasConsented(event.target.checked);
                 if (event.target.checked) {
                   setConsentError("");
+                } else {
+                  setConsentError(
+                    "Please agree to the privacy policy to enable scanning."
+                  );
                 }
               }}
             />
