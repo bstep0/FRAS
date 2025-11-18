@@ -365,12 +365,15 @@ def test_finalize_attendance_rejects_outside_allowlist(load_app):
 
     assert status_code == 403
     assert payload["status"] == "rejected"
-    assert "Follow-up request must originate from EagleNet." in payload["message"]
+    assert "EagleNet or an authorized home network" in payload["message"]
 
     stored_record = fake_db.get_attendance(record_id)
     assert stored_record["status"] == "Rejected"
     assert stored_record["date"] == original_record["date"]
-    assert stored_record["rejectionReason"] == "Follow-up request must originate from EagleNet."
+    assert (
+        stored_record["rejectionReason"]
+        == "Follow-up request must originate from EagleNet or an authorized home network."
+    )
     assert "proposedStatus" not in stored_record
     assert "isPending" not in stored_record
     assert "finalizedAt" in stored_record

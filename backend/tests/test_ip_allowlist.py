@@ -121,15 +121,16 @@ def test_disallowed_ip_short_circuits(monkeypatch, app_module, caplog):
     assert "unauthorized IP" in caplog.text
 
 
-def test_home_cidr_defaults_are_narrow(monkeypatch, app_module):
+def test_home_cidr_defaults_cover_home_range(monkeypatch, app_module):
     monkeypatch.delenv("HOME_CIDR_STRINGS", raising=False)
     monkeypatch.delenv("HOME_CIDRS", raising=False)
 
     app_module.refresh_allowed_networks()
 
     assert app_module.is_ip_allowed("192.168.1.70")
-    assert not app_module.is_ip_allowed("192.168.1.71")
-    assert not app_module.is_ip_allowed("192.168.0.1")
+    assert app_module.is_ip_allowed("192.168.1.71")
+    assert app_module.is_ip_allowed("192.168.0.1")
+    assert not app_module.is_ip_allowed("10.0.0.1")
 
 
 def test_home_cidr_can_be_overridden(monkeypatch, app_module):
