@@ -1830,6 +1830,18 @@ def debug_trigger_absence_threshold():
         }
     ), 200
 
+@app.route("/api/debug/ip", methods=["GET"])
+def debug_ip():
+    forwarded_for = request.headers.get("X-Forwarded-For", None)
+
+    remote_addr = request.remote_addr
+
+    return jsonify({
+        "remote_addr": remote_addr,
+        "x_forwarded_for": forwarded_for,
+        "all_headers": dict(request.headers)
+    }), 200
+
 
 
 if __name__ == "__main__":
