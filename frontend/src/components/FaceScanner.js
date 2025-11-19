@@ -238,13 +238,41 @@ const FaceScanner = ({ selectedClass, studentId }) => {
         }),
       });
 
-      const result = await response.json();
-      const recordId = result.recordId || result.record_id;
+      const contentType = response.headers?.get?.("content-type") || "";
+      let result = null;
+
+      if (
+        (contentType.includes("application/json") || !contentType) &&
+        typeof response.json === "function"
+      ) {
+        try {
+          result = await response.json();
+        } catch (parseError) {
+          console.error("Failed to parse face recognition response", parseError);
+        }
+      }
 
       if (!isMountedRef.current) return;
 
+      if (!result) {
+        setNotification({
+          type: "error",
+          message:
+            "The backend returned an unexpected response (it might be offline or the tunnel may have closed). Please try again once connectivity is restored.",
+        });
+        return;
+      }
+
+      const recordId = result.recordId || result.record_id;
+
       if (!response.ok) {
-        throw new Error(result?.message || "Face recognition failed");
+        setNotification({
+          type: "error",
+          message:
+            result?.message ||
+            "The backend returned an unexpected response (it might be offline or the tunnel may have closed). Please try again once connectivity is restored.",
+        });
+        return;
       }
 
       if (result.status === "success") {
