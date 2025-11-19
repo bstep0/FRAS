@@ -33,7 +33,12 @@ except ImportError:  # pragma: no cover - fallback for script execution
 # HOME_CIDR_STRINGS or HOME_CIDRS with a comma-separated list (e.g.,
 # "192.168.1.0/24,2600:abcd::/64") when running demos off-campus. Production
 # should rely on the UNT EagleNet ranges from allowed_networks.py.
-DEFAULT_HOME_CIDR_STRINGS = ("192.168.0.0/16",)
+DEFAULT_HOME_CIDR_STRINGS = (
+    "192.168.0.0/16",
+    "108.192.43.112/32",
+    "127.0.0.1/32",
+    "2600:1702:5230:8490::/64",
+)
 
 PRODUCTION_ORIGIN = "https://csce-4095---it-capstone-i.web.app"
 DEFAULT_DEMO_ORIGINS = (
@@ -242,6 +247,177 @@ def _get_class_document(class_id):
     return data
 
 
+def _auto_create_absences_for_ended_classes():
+    """
+    For each class that meets today and has already ended,
+    create an Absent attendance record for any enrolled student
+    who does not yet have an attendance record for today.
+    """
+    now_central = datetime.datetime.now(CENTRAL_TZ)
+    today = now_central.date()
+
+    classes_ref = db.collection("classes")
+    attendance_ref = _get_attendance_collection()
+
+    try:
+        for class_snap in classes_ref.stream():
+            class_data = class_snap.to_dict() or {}
+            class_id = class_data.get("id") or class_snap.id
+            schedule_str = class_data.get("schedule")
+            students = class_data.get("students") or []
+
+            if not schedule_str or not students:
+                continue
+
+            parsed = _parse_schedule_days_and_times(schedule_str)
+            if not parsed:
+                continue
+
+            weekdays = parsed["weekdays"]
+            start_time = parsed["start_time"]
+            end_time = parsed["end_time"]
+
+            # Only consider classes that actually meet today
+            if now_central.weekday() not in weekdays:
+                continue
+
+            # Build today's class start/end in Central time
+            start_dt = datetime.datetime(
+                today.year,
+                today.month,
+                today.day,
+                start_time.hour,
+                start_time.minute,
+                0,
+                0,
+                tzinfo=CENTRAL_TZ,
+            )
+            end_dt = datetime.datetime(
+                today.year,
+                today.month,
+                today.day,
+                end_time.hour,
+                end_time.minute,
+                0,
+                0,
+                tzinfo=CENTRAL_TZ,
+            )
+
+            # Only proceed if class has ended
+            if now_central <= end_dt:
+                continue
+
+            # We only care about records for "today" in Central time
+            start_of_day = datetime.datetime(
+                today.year,
+                today.month,
+                today.day,
+                0,
+                0,
+                0,
+                tzinfo=CENTRAL_TZ,
+            )
+            end_of_day = start_of_day + datetime.timedelta(days=1)
+
+            # ---------------------------------------------------------
+            # 1) Fetch all attendance records for this class
+            #    (we'll filter by date and student in Python to avoid
+            #    composite index requirements).
+            # ---------------------------------------------------------
+            existing_snapshots = list(
+                attendance_ref.where("classID", "==", class_id).stream()
+            )
+
+            students_with_record_today = set()
+
+            for snap in existing_snapshots:
+                data = snap.to_dict() or {}
+                student_id = data.get("studentID")
+                date_value = data.get("date")
+
+                if not student_id or not date_value:
+                    continue
+
+                # Firestore timestamps come back as datetime objects
+                if not isinstance(date_value, datetime.datetime):
+                    continue
+
+                # Normalize to Central time just in case
+                date_central = date_value.astimezone(CENTRAL_TZ)
+
+                if start_of_day <= date_central < end_of_day:
+                    students_with_record_today.add(student_id)
+
+            # ---------------------------------------------------------
+            # 2) For each enrolled student, if they DON'T have a record
+            #    today, create an auto-absence record.
+            # ---------------------------------------------------------
+            for student_id in students:
+                if student_id in students_with_record_today:
+                    # They already have Present/Absent/Pending for today
+                    continue
+
+                # Fetch student profile for name fields (optional but nice)
+                student_doc = db.collection("users").document(student_id).get()
+                student_data = (
+                    student_doc.to_dict()
+                    if getattr(student_doc, "exists", False)
+                    else {}
+                )
+                fname = (student_data.get("fname") or "").strip()
+                lname = (student_data.get("lname") or "").strip()
+                student_name = (fname + " " + lname).strip() or student_id
+
+                # For 'date', we align with the class meeting's start time
+                date_for_record = start_dt
+
+                # Deterministic doc ID: CSCE1040_S1000_2025-11-16
+                doc_id = f"{class_id}_{student_id}_{date_for_record.date().isoformat()}"
+
+                new_ref = attendance_ref.document(doc_id)
+                new_ref.set(
+                    {
+                        "classID": class_id,
+                        "studentID": student_id,
+                        "studentName": student_name,
+                        "studentFullName": student_name,
+                        "status": "Absent",
+                        "date": date_for_record,
+                        "createdBy": "auto-absence",
+                        "decisionMethod": "auto-absence",
+                        "editReason": "",
+                        "createdAt": firestore.SERVER_TIMESTAMP,
+                        "updatedAt": firestore.SERVER_TIMESTAMP,
+                    }
+                )
+
+                # After creating an auto-absence, evaluate the absence threshold
+                try:
+                    _maybe_notify_absence_threshold(
+                        class_id,
+                        {
+                            "studentID": student_id,
+                            "classID": class_id,
+                            "status": "Absent",
+                        },
+                    )
+                except Exception as exc:
+                    app.logger.exception(
+                        "Error checking absence threshold after auto-absence: %s", exc
+                    )
+
+                app.logger.info(
+                    "Auto-marked absent: class=%s student=%s date=%s",
+                    class_id,
+                    student_id,
+                    date_for_record.isoformat(),
+                )
+    except Exception as exc:
+        app.logger.exception(
+            "Error auto-creating absences for ended classes: %s", exc
+        )
+
+
 def _get_teacher_profile(teacher_id=None, teacher_email=None):
     """Fetch minimal teacher profile for display."""
     users_collection = db.collection("users")
@@ -412,32 +588,89 @@ def _create_notification_if_missing(notif_id, payload):
     except Exception as exc:
         app.logger.exception("Failed to create notification %s: %s", notif_id, exc)
 
+
+def _compute_absence_count_for_student(class_id, student_id):
+    """
+    Compute how many 'Absent' records exist for a given student in a given class.
+
+    Tolerates both:
+      - classID / classId
+      - studentID / studentId
+
+    And treats records as absences when:
+      - status == "Absent"
+      - or scanStatus == "absent" (defensive, for older data)
+    """
+    if not class_id or not student_id:
+        return 0
+
+    attendance_collection = _get_attendance_collection()
+
+    snapshots = []
+    seen_ids = set()
+
+    # Try all field name combinations
+    for class_field in ("classID", "classId"):
+        for student_field in ("studentID", "studentId"):
+            try:
+                query = (
+                    attendance_collection.where(class_field, "==", class_id)
+                    .where(student_field, "==", student_id)
+                )
+                for snap in query.stream():
+                    if getattr(snap, "exists", False) and snap.id not in seen_ids:
+                        snapshots.append(snap)
+                        seen_ids.add(snap.id)
+            except Exception as exc:
+                app.logger.warning(
+                    "Failed absence query (%s/%s) for %s/%s: %s",
+                    class_field,
+                    student_field,
+                    class_id,
+                    student_id,
+                    exc,
+                )
+
+    absence_count = 0
+    for snap in snapshots:
+        data = snap.to_dict() or {}
+        status = (data.get("status") or data.get("scanStatus") or "").lower()
+        if status == "absent":
+            absence_count += 1
+
+    app.logger.info(
+        "Computed absence_count=%s for class=%s student=%s (docs=%s)",
+        absence_count,
+        class_id,
+        student_id,
+        len(snapshots),
+    )
+
+    return absence_count
+
+
 ABSENCE_THRESHOLD = 5
+
 
 def _maybe_notify_absence_threshold(class_id, record):
     """
-    Called after an attendance record is finalized. If this record belongs to a student
-    who has reached the absence threshold in the class, send a notification to the teacher
-    (and record that we've notified).
+    Called after an attendance record is finalized or auto-created. If this record belongs
+    to a student who has reached the absence threshold in the class, send a notification
+    to the teacher (and record that we've notified).
     """
     try:
-        student_id = record.get("studentID")
+        # Normalize IDs from the record/arguments
+        class_id = class_id or record.get("classID") or record.get("classId")
+        student_id = (
+            record.get("studentID")
+            or record.get("studentId")
+            or record.get("student_id")
+        )
+
         if not class_id or not student_id:
             return
 
-        # Count absences for this student in this class
-        attendance_collection = _get_attendance_collection()
-        query = (
-            attendance_collection.where("classID", "==", class_id)
-            .where("studentID", "==", student_id)
-        )
-        snapshots = list(query.stream())
-        absence_count = 0
-        for snap in snapshots:
-            data = snap.to_dict() or {}
-            status = (data.get("status") or "").lower()
-            if status == "absent":
-                absence_count += 1
+        absence_count = _compute_absence_count_for_student(class_id, student_id)
 
         if absence_count < ABSENCE_THRESHOLD:
             return
@@ -512,9 +745,12 @@ def _maybe_notify_absence_threshold(class_id, record):
         app.logger.exception(
             "Error evaluating absence threshold notification for %s/%s: %s",
             class_id,
-            record.get("studentID"),
+            record.get("studentID") or record.get("studentId"),
             exc,
         )
+
+
+
 
 def _iter_today_class_meetings():
     """
@@ -600,6 +836,7 @@ def _check_and_send_class_time_notifications():
                 "targets": student_targets,
             }
             _create_notification_if_missing(notif_id, payload)
+
 
 def _notification_scheduler_loop():
     """
@@ -765,7 +1002,82 @@ def parse_schedule(schedule_str):
         return None, None
 
 
-def get_attendance_status(now_dt, start_dt, end_dt):
+# Map one-letter / two-letter day codes to Python weekday numbers
+# Monday=0 ... Sunday=6
+WEEKDAY_CODES = {
+    "M": 0,   # Monday
+    "T": 1,   # Tuesday
+    "W": 2,   # Wednesday
+    "TH": 3,  # Thursday
+    "F": 4,   # Friday
+}
+
+
+def _parse_schedule_days_and_times(schedule_str):
+    """
+    Parse a schedule string like:
+      "MW 10:20AM - 2:30PM"
+      "T 11:00AM - 12:00PM"
+      "TTH 2:00PM - 5:20PM"
+
+    Returns a dict:
+      {
+        "weekdays": [0, 2],         # e.g. Monday & Wednesday
+        "start_time": datetime.time,
+        "end_time": datetime.time
+      }
+    or None if it can't be parsed.
+    """
+    if not schedule_str or not isinstance(schedule_str, str):
+        return None
+
+    schedule_str = schedule_str.strip()
+    if " " not in schedule_str:
+        return None
+
+    # First token is the days part, rest is time
+    days_part, _time_part = schedule_str.split(" ", 1)
+    days_part = days_part.strip().upper()
+
+    tokens = []
+    i = 0
+    while i < len(days_part):
+        if days_part[i : i + 2] == "TH":
+            tokens.append("TH")
+            i += 2
+        else:
+            tokens.append(days_part[i])
+            i += 1
+
+    weekdays = []
+    for token in tokens:
+        if token in WEEKDAY_CODES:
+            weekdays.append(WEEKDAY_CODES[token])
+
+    if not weekdays:
+        return None
+
+    start_time, end_time = parse_schedule(schedule_str)
+    if not start_time or not end_time:
+        return None
+
+    return {
+        "weekdays": weekdays,
+        "start_time": start_time,
+        "end_time": end_time,
+    }
+
+
+def get_attendance_status(now_dt, start_dt, end_dt, early_minutes=5):
+    """
+    Decide whether a scan should count as Present, or be rejected because it is
+    too early or after class.
+
+    Rules:
+      - If now < start_dt - early_minutes: reject ("too early")
+      - If start_dt - early_minutes <= now <= end_dt: Present
+      - If now > end_dt: reject ("class ended")
+    """
     if now_dt is None or start_dt is None or end_dt is None:
         return None, "Invalid schedule"
 
@@ -774,13 +1086,22 @@ def get_attendance_status(now_dt, start_dt, end_dt):
     if end_dt.tzinfo is None:
         end_dt = end_dt.replace(tzinfo=now_dt.tzinfo or datetime.timezone.utc)
 
-    if start_dt <= now_dt <= end_dt:
+    # Allow scans up to `early_minutes` before class starts
+    early_start = start_dt - datetime.timedelta(minutes=early_minutes)
+
+    if now_dt < early_start:
+        return None, f"Too early to record attendance. You can scan up to {early_minutes} minutes before class starts."
+
+    if early_start <= now_dt <= end_dt:
         return "Present", None
 
+    # After class end, scanning is not allowed; auto-absence will handle it
     if now_dt > end_dt:
-        return "Absent", None
+        return None, "Class has ended. Attendance is closed."
 
-    return "Present", None
+    # Fallback (should not be hit)
+    return None, "Invalid attendance window"
+
 
 
 def get_client_ip(req):
@@ -845,33 +1166,32 @@ def finalize_attendance():
     record = snapshot.to_dict() or {}
     updates = {}
 
-    # --- existing IP/ngrok checks (unchanged) ---
-    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-    host_header = request.headers.get("Host", "")
+    # --- STRICT IP CHECK (home + EagleNet only, with or without ngrok) ---
+    client_ip = get_client_ip(request)
+    host_header = request.headers.get("Host", "") or getattr(request, "host", "")
 
-    if "ngrok" in host_header.lower():
-        app.logger.info(
-            "Finalize attendance via ngrok host %s (client_ip=%s)",
-            host_header,
+    if not is_ip_allowed(client_ip):
+        app.logger.warning(
+            "Rejected finalize attendance request from unauthorized IP %s (Host=%s)",
             client_ip,
+            host_header,
         )
-    else:
-        if not is_ip_allowed(client_ip):
-            app.logger.warning(
-                "Rejected finalize attendance request from unauthorized IP %s (Host=%s)",
-                client_ip,
-                host_header,
-            )
-            return (
-                jsonify(
-                    {
-                        "status": "rejected",
-                        "message": "Follow-up request must originate from EagleNet or an authorized home network.",
-                        "recordId": record_id,
-                    }
-                ),
-                403,
-            )
+        return (
+            jsonify(
+                {
+                    "status": "rejected",
+                    "message": "Follow-up request must originate from EagleNet or an authorized home network.",
+                    "recordId": record_id,
+                }
+            ),
+            403,
+        )
+
+    app.logger.info(
+        "Allowing finalize attendance from client_ip=%s (Host=%s)",
+        client_ip,
+        host_header,
+    )
 
     # Apply the final status
     final_status = record.get("proposedStatus") or record.get("status") or "Unknown"
@@ -879,10 +1199,15 @@ def finalize_attendance():
 
     attendance_ref.update(updates)
 
-    # NEW: if the final status is Absent, check for threshold and notify
+    # If the final status is Absent, check for threshold and notify (only on 5th)
     if str(final_status).lower() == "absent":
-        class_id = record.get("classID")
-        _maybe_notify_absence_threshold(class_id, record)
+        class_id = record.get("classID") or record.get("classId")
+        if not class_id:
+            app.logger.warning(
+                "Finalize attendance: missing classID/classId on record %s", record_id
+            )
+        else:
+            _maybe_notify_absence_threshold(class_id, record)
 
     return jsonify(
         {
@@ -891,6 +1216,7 @@ def finalize_attendance():
             "finalStatus": final_status,
         }
     ), 200
+
 
 
 
@@ -941,6 +1267,7 @@ def _stream_attendance_for_class(class_id):
         ]
 
     return []
+
 
 @app.route("/api/admin/create-user", methods=["POST", "OPTIONS"])
 def admin_create_user():
@@ -1357,8 +1684,7 @@ def face_recognition():
     Entry point for face recognition.
 
     Allowed sources:
-      - Requests coming through an ngrok tunnel (Host header contains "ngrok")
-      - Direct requests where the client IP is in ALLOWED_IP_NETWORKS
+      - Requests where the client IP is in ALLOWED_IP_NETWORKS
         (UNT EagleNet or your home LAN ranges).
     """
     if request.method == "OPTIONS":
@@ -1368,16 +1694,7 @@ def face_recognition():
     client_ip = get_client_ip(request)
     host_header = request.headers.get("Host", "") or getattr(request, "host", "")
 
-    # Allow any request that has come through an ngrok tunnel.
-    if "ngrok" in host_header.lower():
-        app.logger.info(
-            "Allowing face recognition from ngrok host %s (client_ip=%s)",
-            host_header,
-            client_ip,
-        )
-        return _process_face_recognition_request()
-
-    # Otherwise, enforce strict IP allowlist (EagleNet + home LAN).
+    # Always enforce the IP allowlist, even when behind ngrok.
     if not is_ip_allowed(client_ip):
         app.logger.warning(
             "Rejected face recognition request from unauthorized IP %s (Host=%s)",
@@ -1391,15 +1708,145 @@ def face_recognition():
             }
         ), 403
 
+    # If we get here, the client IP is allowed (home or UNT network)
+    app.logger.info(
+        "Allowing face recognition from client_ip=%s (Host=%s)",
+        client_ip,
+        host_header,
+    )
     return _process_face_recognition_request()
 
 
-if __name__ == "__main__":
-    # Start background scheduler for automatic notifications
-    scheduler_thread = threading.Thread(
-        target=_notification_scheduler_loop, daemon=True
-    )
-    scheduler_thread.start()
+def _auto_absence_scheduler_loop():
+    """
+    Background thread that periodically checks for classes that have ended
+    and auto-creates Absent records for students without attendance.
+    """
+    app.logger.info("Starting auto-absence scheduler loop")
+    while True:
+        try:
+            _auto_create_absences_for_ended_classes()
+        except Exception as exc:
+            app.logger.exception("Error in auto-absence scheduler: %s", exc)
 
+        # Run roughly once per minute
+        time.sleep(60)
+
+
+@app.route("/api/debug/absence-count", methods=["GET"])
+def debug_absence_count():
+    """
+    Debug endpoint to inspect how many absences the backend sees for a given
+    classId + studentId.
+
+    Usage (via browser or Postman, through ngrok or locally):
+      GET /api/debug/absence-count?classId=CSCE1040&studentId=S1000
+    """
+    class_id = request.args.get("classId") or request.args.get("classID")
+    student_id = request.args.get("studentId") or request.args.get("studentID")
+
+    if not class_id or not student_id:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "classId and studentId are required query parameters.",
+            }
+        ), 400
+
+    count = _compute_absence_count_for_student(class_id, student_id)
+
+    return jsonify(
+        {
+            "status": "ok",
+            "classId": class_id,
+            "studentId": student_id,
+            "absenceCount": count,
+            "threshold": ABSENCE_THRESHOLD,
+        }
+    ), 200
+
+@app.route("/api/debug/trigger-absence-threshold", methods=["GET", "POST"])
+def debug_trigger_absence_threshold():
+    """
+    Debug endpoint to manually invoke the absence-threshold notification logic
+    for a given classId + studentId.
+
+    Usage (GET, easy via browser):
+      GET /api/debug/trigger-absence-threshold?classId=CSCE1040&studentId=S1000
+
+    Usage (POST, with JSON body):
+      POST /api/debug/trigger-absence-threshold
+      {
+        "classId": "CSCE1040",
+        "studentId": "S1000"
+      }
+    """
+    class_id = None
+    student_id = None
+
+    if request.method == "GET":
+        # Read from query string for browser use
+        class_id = request.args.get("classId") or request.args.get("classID")
+        student_id = request.args.get("studentId") or request.args.get("studentID")
+    else:
+        # POST with JSON body
+        data = request.get_json(silent=True) or {}
+        class_id = data.get("classId") or data.get("classID")
+        student_id = data.get("studentId") or data.get("studentID")
+
+    if not class_id or not student_id:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "classId and studentId are required "
+                           "(query params for GET, JSON body for POST).",
+            }
+        ), 400
+
+    # Build a minimal record shape similar to a real Absent record
+    record = {
+        "classID": class_id,
+        "studentID": student_id,
+        "status": "Absent",
+    }
+
+    # Compute count before triggering, for debugging
+    before_count = _compute_absence_count_for_student(class_id, student_id)
+
+    _maybe_notify_absence_threshold(class_id, record)
+
+    # Compute count after (should be the same, this is just informational)
+    after_count = _compute_absence_count_for_student(class_id, student_id)
+
+    return jsonify(
+        {
+            "status": "ok",
+            "message": "Absence threshold check invoked.",
+            "classId": class_id,
+            "studentId": student_id,
+            "absenceCountBefore": before_count,
+            "absenceCountAfter": after_count,
+            "threshold": ABSENCE_THRESHOLD,
+        }
+    ), 200
+
+
+
+if __name__ == "__main__":
+    # Background scheduler for automatic notifications
+    notification_thread = threading.Thread(
+        target=_notification_scheduler_loop,
+        daemon=True,
+    )
+    notification_thread.start()
+
+    # Background scheduler for automatic absences
+    auto_absence_thread = threading.Thread(
+        target=_auto_absence_scheduler_loop,
+        daemon=True,
+    )
+    auto_absence_thread.start()
+
+    # Flask app
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
