@@ -39,6 +39,7 @@ const NotificationsPage = ({ title = "Notifications" }) => {
     markAllAsRead,
     pushToast,
     createTestNotification,
+    deleteNotification
   } = useNotifications();
   const [filter, setFilter] = useState("all");
   const [isCreatingTest, setIsCreatingTest] = useState(false);
@@ -56,6 +57,11 @@ const NotificationsPage = ({ title = "Notifications" }) => {
   const handleMarkAsRead = (event, notificationId) => {
     event.preventDefault();
     markAsRead(notificationId);
+  };
+
+  const handleDelete = (event, notificationId) => {
+    event.preventDefault();
+    deleteNotification(notificationId);
   };
 
   const renderActionButton = (notification) => {
@@ -102,11 +108,10 @@ const NotificationsPage = ({ title = "Notifications" }) => {
         <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${badgeClass}`}>
-                {tone.charAt(0).toUpperCase() + tone.slice(1)}
-              </span>
               {createdAt ? (
-                <span className="text-xs text-gray-500 dark:text-slate-400">{formatDateTime(createdAt)}</span>
+                <span className="text-xs text-gray-500 dark:text-slate-400">
+                  {formatDateTime(createdAt)}
+                </span>
               ) : null}
             </div>
             <p className="mt-2 text-base font-semibold text-slate-900 dark:text-white">{titleText}</p>
@@ -119,12 +124,19 @@ const NotificationsPage = ({ title = "Notifications" }) => {
               <button
                 type="button"
                 onClick={(event) => handleMarkAsRead(event, notification.id)}
-                className="text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-200 dark:hover:text-blue-100"
+                className="text-sm font-medium text-green-600 hover:text-blue-800 dark:text-blue-200 dark:hover:text-blue-100"
               >
                 Mark as read
               </button>
             ) : null}
             {renderActionButton(notification)}
+            <button
+              type="button"
+              onClick={(event) => handleDelete(event, notification.id)}
+              className="text-sm font-medium text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+            >
+              Delete
+            </button>
           </div>
         </div>
       </li>
@@ -174,14 +186,6 @@ const NotificationsPage = ({ title = "Notifications" }) => {
               }`}
             >
               Read
-            </button>
-            <button
-              type="button"
-              onClick={markAllAsRead}
-              className="rounded-full bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-200 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
-              disabled={!notifications.some((notification) => !notification.read)}
-            >
-              Mark all as read
             </button>
           </div>
         </div>

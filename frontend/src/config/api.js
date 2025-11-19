@@ -53,6 +53,9 @@ export const FACE_RECOGNITION_ENDPOINT = `${API_BASE}/api/face-recognition`;
 export const FINALIZE_ATTENDANCE_ENDPOINT = `${API_BASE}/api/attendance/finalize`;
 export const EXPORT_ATTENDANCE_ENDPOINT = `${API_BASE}/api/attendance/export`;
 
+// Admin endpoints
+export const ADMIN_CREATE_USER_ENDPOINT = `${API_BASE}/api/admin/create-user`;
+
 // How long the frontend treats a scan as "pending" (minutes)
 export const PENDING_VERIFICATION_MINUTES = 1;
 
@@ -61,5 +64,6 @@ export default {
   FACE_RECOGNITION_ENDPOINT,
   FINALIZE_ATTENDANCE_ENDPOINT,
   EXPORT_ATTENDANCE_ENDPOINT,
+  ADMIN_CREATE_USER_ENDPOINT,
   PENDING_VERIFICATION_MINUTES,
 };

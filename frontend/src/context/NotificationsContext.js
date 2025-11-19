@@ -15,6 +15,7 @@ import {
   onSnapshot,
   query,
   updateDoc,
+  deleteDoc,
   where,
   writeBatch,
   serverTimestamp,
@@ -337,6 +338,22 @@ export const NotificationsProvider = ({ children }) => {
     }
   }, [notifications]);
 
+  const deleteNotification = useCallback(async (notificationId) => {
+    if (!notificationId) return;
+
+    // Optimistic update: remove from local state first
+    setNotifications((prev) =>
+      prev.filter((notification) => notification.id !== notificationId)
+    );
+
+    try {
+      await deleteDoc(doc(db, "notifications", notificationId));
+    } catch (error) {
+      console.error("Failed to delete notification", error);
+    }
+  }, []);
+
+
   const createTestNotification = useCallback(
     async ({ audience = "all", tone = "info" } = {}) => {
       const timestampLabel = new Date().toLocaleString();
@@ -478,6 +495,7 @@ export const NotificationsProvider = ({ children }) => {
       unreadCount,
       markAsRead,
       markAllAsRead,
+      deleteNotification,
       bannerNotification,
       dismissBanner,
       toastNotification,
@@ -491,6 +509,7 @@ export const NotificationsProvider = ({ children }) => {
       unreadCount,
       markAsRead,
       markAllAsRead,
+      deleteNotification,
       bannerNotification,
       dismissBanner,
       toastNotification,

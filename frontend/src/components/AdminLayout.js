@@ -8,7 +8,7 @@ const iconClass = "h-5 w-5";
 
 const navigationItems = [
   {
-    label: "Overview",
+    label: "Dashboard",
     to: "/admin",
     icon: (
       <svg

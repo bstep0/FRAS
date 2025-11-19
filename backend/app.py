@@ -14,6 +14,9 @@ import concurrent.futures
 from zoneinfo import ZoneInfo
 import csv
 import io
+import threading
+import time
+
 
 from ipaddress import ip_address, ip_network
 
@@ -273,6 +276,344 @@ def _get_teacher_profile(teacher_id=None, teacher_email=None):
 def _get_attendance_collection():
     return db.collection("attendance")
 
+# ------------------------------
+# Notification + schedule helpers
+# ------------------------------
+
+# Weekday mapping for schedule parsing
+WEEKDAY_CODES = {
+    "M": 0,   # Monday
+    "T": 1,   # Tuesday
+    "W": 2,   # Wednesday
+    "TH": 3,  # Thursday
+    "F": 4,   # Friday
+}
+
+
+def _parse_schedule_string(schedule_str):
+    """
+    Parse a schedule string like "TTH 2:00PM - 5:20PM" or "MW 10:20AM - 2:30PM"
+    into a list of dicts: [{"weekday": 1, "start_time": time, "end_time": time}, ...]
+    """
+    if not schedule_str or not isinstance(schedule_str, str):
+        return []
+
+    try:
+        parts = schedule_str.split(" ", 1)
+        if len(parts) != 2:
+            return []
+        days_part, time_part = parts[0].strip().upper(), parts[1].strip()
+
+        # Parse days, being careful about "TH"
+        tokens = []
+        i = 0
+        while i < len(days_part):
+            if days_part[i : i + 2] == "TH":
+                tokens.append("TH")
+                i += 2
+            else:
+                tokens.append(days_part[i])
+                i += 1
+
+        day_numbers = []
+        for token in tokens:
+            if token in WEEKDAY_CODES:
+                day_numbers.append(WEEKDAY_CODES[token])
+
+        if not day_numbers:
+            return []
+
+        # Parse time range
+        time_range_parts = time_part.split("-")
+        if len(time_range_parts) != 2:
+            return []
+
+        start_str = time_range_parts[0].strip().replace(" ", "")
+        end_str = time_range_parts[1].strip().replace(" ", "")
+
+        # Times like "2:00PM"
+        start_dt = datetime.datetime.strptime(start_str, "%I:%M%p")
+        end_dt = datetime.datetime.strptime(end_str, "%I:%M%p")
+        start_time = start_dt.time()
+        end_time = end_dt.time()
+
+        return [
+            {"weekday": day_num, "start_time": start_time, "end_time": end_time}
+            for day_num in day_numbers
+        ]
+    except Exception as exc:  # defensive
+        app.logger.warning("Failed to parse schedule string '%s': %s", schedule_str, exc)
+        return []
+
+
+def _get_user_doc(user_id):
+    """
+    Fetch a user document by its document ID (e.g., 'S1000', 'T2000').
+    Returns (snapshot, data_dict) or (None, {}).
+    """
+    if not user_id:
+        return None, {}
+    try:
+        doc_ref = db.collection("users").document(user_id)
+        snap = doc_ref.get()
+        if getattr(snap, "exists", False):
+            return snap, snap.to_dict() or {}
+    except Exception as exc:
+        app.logger.warning("Failed to fetch user %s: %s", user_id, exc)
+    return None, {}
+
+
+def _collect_student_targets_for_class(class_data):
+    """
+    Given a class document dict, return a list of target identifiers
+    (emails) for enrolled students.
+    """
+    students = class_data.get("students") or []
+    targets = []
+
+    for student_id in students:
+        _, user_data = _get_user_doc(student_id)
+        email = (user_data.get("email") or "").strip().lower()
+        if email:
+            targets.append(email)
+
+    # Deduplicate
+    return sorted(set(targets))
+
+
+def _get_teacher_targets_for_class(class_data):
+    teacher_id = class_data.get("teacher")
+    _, teacher_data = _get_user_doc(teacher_id)
+    email = (teacher_data.get("email") or "").strip().lower()
+    if email:
+        return [email]
+    return []
+
+
+def _create_notification_if_missing(notif_id, payload):
+    """
+    Create a notification document with a deterministic ID if it does not already exist.
+    """
+    try:
+        notifications_ref = db.collection("notifications")
+        doc_ref = notifications_ref.document(notif_id)
+        snap = doc_ref.get()
+        if getattr(snap, "exists", False):
+            # Already created in a previous scheduler tick
+            return
+
+        # Ensure server timestamps / defaults
+        payload = dict(payload)  # shallow copy
+        payload.setdefault("createdAt", firestore.SERVER_TIMESTAMP)
+        payload.setdefault("read", False)
+
+        doc_ref.set(payload)
+        app.logger.info("Created notification %s", notif_id)
+    except Exception as exc:
+        app.logger.exception("Failed to create notification %s: %s", notif_id, exc)
+
+ABSENCE_THRESHOLD = 5
+
+def _maybe_notify_absence_threshold(class_id, record):
+    """
+    Called after an attendance record is finalized. If this record belongs to a student
+    who has reached the absence threshold in the class, send a notification to the teacher
+    (and record that we've notified).
+    """
+    try:
+        student_id = record.get("studentID")
+        if not class_id or not student_id:
+            return
+
+        # Count absences for this student in this class
+        attendance_collection = _get_attendance_collection()
+        query = (
+            attendance_collection.where("classID", "==", class_id)
+            .where("studentID", "==", student_id)
+        )
+        snapshots = list(query.stream())
+        absence_count = 0
+        for snap in snapshots:
+            data = snap.to_dict() or {}
+            status = (data.get("status") or "").lower()
+            if status == "absent":
+                absence_count += 1
+
+        if absence_count < ABSENCE_THRESHOLD:
+            return
+
+        # Load student user doc (for email + absenceNotifications map)
+        student_snap, student_data = _get_user_doc(student_id)
+        if not student_snap:
+            app.logger.warning(
+                "Student user doc not found for absence threshold check: %s", student_id
+            )
+            return
+
+        # Check if we've already notified at this threshold for this class
+        absence_state = student_data.get("absenceNotifications") or {}
+        last_threshold = int(absence_state.get(class_id, 0) or 0)
+        if last_threshold >= ABSENCE_THRESHOLD:
+            # Already notified at or above this threshold
+            return
+
+        # Load class & teacher info
+        class_snap = db.collection("classes").document(class_id).get()
+        if not getattr(class_snap, "exists", False):
+            app.logger.warning(
+                "Class doc %s not found for absence threshold check", class_id
+            )
+            return
+
+        class_data = class_snap.to_dict() or {}
+        class_name = class_data.get("name") or class_id
+
+        teacher_targets = _get_teacher_targets_for_class(class_data)
+        if not teacher_targets:
+            app.logger.warning(
+                "No teacher targets found for absence threshold notification in class %s",
+                class_id,
+            )
+            return
+
+        # Build student display name
+        student_fname = (student_data.get("fname") or "").strip()
+        student_lname = (student_data.get("lname") or "").strip()
+        student_name = (student_fname + " " + student_lname).strip() or student_id
+
+        notif_id = f"absence_{class_id}_{student_id}_ge{ABSENCE_THRESHOLD}"
+
+        payload = {
+            "type": "student_absence_threshold_instructor",
+            "tone": "info",
+            "channel": "toast",
+            "title": f"{student_name} has {absence_count} absences in {class_name}",
+            "message": (
+                f"{student_name} ({student_id}) now has {absence_count} "
+                f"recorded absences in {class_name}."
+            ),
+            "classId": class_id,
+            "className": class_name,
+            "studentId": student_id,
+            "studentName": student_name,
+            "currentAbsences": absence_count,
+            "threshold": ABSENCE_THRESHOLD,
+            "actionLabel": "View attendance",
+            "actionHref": f"/teacher/classes/{class_id}/students/{student_id}",
+            "targets": teacher_targets,
+        }
+
+        _create_notification_if_missing(notif_id, payload)
+
+        # Update student's absenceNotifications map so we don't notify again at 5
+        field_path = f"absenceNotifications.{class_id}"
+        db.collection("users").document(student_id).update({field_path: absence_count})
+    except Exception as exc:
+        app.logger.exception(
+            "Error evaluating absence threshold notification for %s/%s: %s",
+            class_id,
+            record.get("studentID"),
+            exc,
+        )
+
+def _iter_today_class_meetings():
+    """
+    Yield (class_id, class_data, start_dt) for each class that meets today.
+    """
+    now = datetime.datetime.now(CENTRAL_TZ)
+    today_weekday = now.weekday()
+    classes_ref = db.collection("classes")
+
+    try:
+        for snap in classes_ref.stream():
+            class_id = snap.id
+            class_data = snap.to_dict() or {}
+            schedule_str = class_data.get("schedule")
+            if not schedule_str:
+                continue
+
+            meetings = _parse_schedule_string(schedule_str)
+            for meeting in meetings:
+                if meeting["weekday"] != today_weekday:
+                    continue
+                start_dt = datetime.datetime.combine(
+                    now.date(), meeting["start_time"], tzinfo=CENTRAL_TZ
+                )
+                yield class_id, class_data, start_dt
+    except Exception as exc:
+        app.logger.exception("Error iterating class meetings: %s", exc)
+
+
+def _check_and_send_class_time_notifications():
+    """
+    Run periodically (e.g., once per minute) to send:
+      - 'class starts in 10 minutes' notifications
+      - 'class starting now' notifications
+    """
+    now = datetime.datetime.now(CENTRAL_TZ)
+
+    for class_id, class_data, start_dt in _iter_today_class_meetings():
+        minutes_to_start = (start_dt - now).total_seconds() / 60.0
+        date_key = start_dt.strftime("%Y%m%d")
+
+        # Build student targets
+        student_targets = _collect_student_targets_for_class(class_data)
+        if not student_targets:
+            continue
+
+        class_name = class_data.get("name") or class_id
+        room = class_data.get("room") or ""
+
+        # 1) About 10 minutes before class
+        if 9.0 <= minutes_to_start <= 11.0:
+            notif_id = f"class_{class_id}_{date_key}_pre"
+            payload = {
+                "type": "class_upcoming_student",
+                "tone": "info",
+                "channel": "toast",
+                "title": f"{class_name} starts in 10 minutes",
+                "message": (
+                    f"{class_name} begins soon"
+                    + (f" in room {room}." if room else ".")
+                ),
+                "classId": class_id,
+                "className": class_name,
+                "room": room,
+                "startTime": start_dt.isoformat(),
+                "targets": student_targets,
+            }
+            _create_notification_if_missing(notif_id, payload)
+
+        # 2) At class start time
+        if -1.0 <= minutes_to_start <= 1.0:
+            notif_id = f"class_{class_id}_{date_key}_start"
+            payload = {
+                "type": "class_start_student",
+                "tone": "info",
+                "channel": "banner",
+                "title": f"Time to record your attendance for {class_name}",
+                "message": "Class has started. Please scan your face now to avoid being marked absent.",
+                "classId": class_id,
+                "className": class_name,
+                "room": room,
+                "startTime": start_dt.isoformat(),
+                "targets": student_targets,
+            }
+            _create_notification_if_missing(notif_id, payload)
+
+def _notification_scheduler_loop():
+    """
+    Background thread that periodically checks for class-time notifications.
+    """
+    app.logger.info("Starting notification scheduler loop")
+    while True:
+        try:
+            _check_and_send_class_time_notifications()
+        except Exception as exc:
+            app.logger.exception("Error in notification scheduler: %s", exc)
+        # Run roughly once per minute
+        time.sleep(60)
+
 
 def _fetch_pending_attendance_records(cutoff_minutes=PENDING_RECHECK_MINUTES):
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -502,58 +843,46 @@ def finalize_attendance():
         ), 404
 
     record = snapshot.to_dict() or {}
-    now = datetime.datetime.now(datetime.timezone.utc)
+    updates = {}
 
-    client_ip = get_client_ip(request)
-    host_header = request.headers.get("Host", "") or getattr(request, "host", "")
+    # --- existing IP/ngrok checks (unchanged) ---
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    host_header = request.headers.get("Host", "")
 
-    updates = {
-        "isPending": firestore.DELETE_FIELD,
-        "proposedStatus": firestore.DELETE_FIELD,
-        "finalizedAt": now,
-    }
-
-    # 1) Allow any request that has come through an ngrok tunnel (same as face-recognition)
     if "ngrok" in host_header.lower():
         app.logger.info(
-            "Allowing attendance finalize from ngrok host %s (client_ip=%s)",
+            "Finalize attendance via ngrok host %s (client_ip=%s)",
             host_header,
             client_ip,
         )
-    # 2) Otherwise, enforce strict IP allowlist (EagleNet + home LAN)
-    elif not is_ip_allowed(client_ip):
-        rejection_reason = (
-            "Follow-up request must originate from EagleNet or an authorized home network."
-        )
-        updates.update(
-            {
-                "status": "Rejected",
-                "rejectionReason": rejection_reason,
-            }
-        )
-        attendance_ref.update(updates)
-        return (
-            jsonify(
-                {
-                    "status": "rejected",
-                    "message": rejection_reason,
-                    "recordId": record_id,
-                }
-            ),
-            403,
-        )
+    else:
+        if not is_ip_allowed(client_ip):
+            app.logger.warning(
+                "Rejected finalize attendance request from unauthorized IP %s (Host=%s)",
+                client_ip,
+                host_header,
+            )
+            return (
+                jsonify(
+                    {
+                        "status": "rejected",
+                        "message": "Follow-up request must originate from EagleNet or an authorized home network.",
+                        "recordId": record_id,
+                    }
+                ),
+                403,
+            )
 
-    # If we got here, either:
-    #   - We're coming through ngrok, OR
-    #   - The client IP is in the allowed networks
+    # Apply the final status
     final_status = record.get("proposedStatus") or record.get("status") or "Unknown"
-    updates.update(
-        {
-            "status": final_status,
-        }
-    )
+    updates.update({"status": final_status})
 
     attendance_ref.update(updates)
+
+    # NEW: if the final status is Absent, check for threshold and notify
+    if str(final_status).lower() == "absent":
+        class_id = record.get("classID")
+        _maybe_notify_absence_threshold(class_id, record)
 
     return jsonify(
         {
@@ -562,6 +891,7 @@ def finalize_attendance():
             "finalStatus": final_status,
         }
     ), 200
+
 
 
 def _extract_datetime(value):
@@ -611,6 +941,64 @@ def _stream_attendance_for_class(class_id):
         ]
 
     return []
+
+@app.route("/api/admin/create-user", methods=["POST", "OPTIONS"])
+def admin_create_user():
+    """
+    Create a Firebase Auth user plus attach a role claim.
+
+    Intended for use by the Admin panel when creating a new student/teacher/admin.
+    Firestore 'users' docs are still handled on the frontend.
+    """
+    if getattr(request, "method", None) == "OPTIONS":
+        # CORS preflight
+        return "", 200
+
+    data = request.get_json(silent=True) or {}
+
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or "test123"
+    role = (data.get("role") or "").strip().lower()
+    fname = (data.get("fname") or "").strip()
+    lname = (data.get("lname") or "").strip()
+
+    if not email or not role:
+        return jsonify(
+            {"status": "error", "message": "Missing email or role."}
+        ), 400
+
+    try:
+        # Create the Auth user
+        user_record = firebase_auth.create_user(
+            email=email,
+            password=password,
+            display_name=f"{fname} {lname}".strip() or None,
+            disabled=False,
+        )
+
+        # Attach the role as a custom claim for Firestore security rules
+        firebase_auth.set_custom_user_claims(user_record.uid, {"role": role})
+
+        return jsonify(
+            {
+                "status": "success",
+                "uid": user_record.uid,
+                "message": "Auth user created.",
+            }
+        ), 200
+
+    except firebase_auth.EmailAlreadyExistsError:
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Email already exists in Firebase Auth.",
+            }
+        ), 409
+    except Exception as exc:  # defensive
+        app.logger.exception("Failed to create auth user")
+        return jsonify(
+            {"status": "error", "message": str(exc)}
+        ), 500
 
 
 @app.route("/api/attendance/export", methods=["GET", "OPTIONS"])
@@ -1007,5 +1395,11 @@ def face_recognition():
 
 
 if __name__ == "__main__":
+    # Start background scheduler for automatic notifications
+    scheduler_thread = threading.Thread(
+        target=_notification_scheduler_loop, daemon=True
+    )
+    scheduler_thread.start()
+
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

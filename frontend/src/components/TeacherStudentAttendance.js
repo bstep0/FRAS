@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   query,
+  getDocs,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -17,6 +18,8 @@ import TeacherLayout from "./TeacherLayout";
 import { useNotifications } from "../context/NotificationsContext";
 import { auth, db } from "../firebaseConfig";
 import { fetchAttendanceDocuments } from "../utils/attendanceQueries";
+
+const ABSENCE_THRESHOLD = 5;
 
 const formatDateLabel = (date) =>
   date.toLocaleDateString("en-US", {
@@ -93,6 +96,131 @@ const resolveStudentName = (studentData, fallbackName, fallbackId) => {
 
   return "Unknown Student";
 };
+
+const checkAbsenceThresholdAndNotify = async (
+  classIdToCheck,
+  studentIdToCheck
+) => {
+  if (!classIdToCheck || !studentIdToCheck) return;
+
+  try {
+    // 1) Count absences for this student in this class
+    const attendanceRef = collection(db, "attendance");
+    const q = query(
+      attendanceRef,
+      where("classID", "==", classIdToCheck),
+      where("studentID", "==", studentIdToCheck)
+    );
+
+    const snapshot = await getDocs(q);
+    let absenceCount = 0;
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      const status = (data.status || "").toString().toLowerCase();
+      if (status === "absent") {
+        absenceCount += 1;
+      }
+    });
+
+    if (absenceCount < ABSENCE_THRESHOLD) {
+      return;
+    }
+
+    // 2) Load student user doc
+    const studentRef = doc(db, "users", studentIdToCheck);
+    const studentSnap = await getDoc(studentRef);
+    if (!studentSnap.exists()) {
+      console.warn(
+        "Student user doc not found for absence threshold check:",
+        studentIdToCheck
+      );
+      return;
+    }
+
+    const studentData = studentSnap.data() || {};
+    const absenceState = studentData.absenceNotifications || {};
+    const lastThreshold = Number(absenceState[classIdToCheck] || 0);
+
+    if (lastThreshold >= ABSENCE_THRESHOLD) {
+      return;
+    }
+
+    // 3) Load class doc + teacher info
+    const classRef = doc(db, "classes", classIdToCheck);
+    const classSnap = await getDoc(classRef);
+    if (!classSnap.exists()) {
+      console.warn(
+        "Class doc not found for absence threshold check:",
+        classIdToCheck
+      );
+      return;
+    }
+
+    const classData = classSnap.data() || {};
+    const className = classData.name || classIdToCheck;
+
+    const teacherId = classData.teacher;
+    if (!teacherId) {
+      console.warn(
+        "No teacher field on class for absence threshold notification:",
+        classIdToCheck
+      );
+      return;
+    }
+
+    const teacherRef = doc(db, "users", teacherId);
+    const teacherSnap = await getDoc(teacherRef);
+    if (!teacherSnap.exists()) {
+      console.warn("Teacher user doc not found:", teacherId);
+      return;
+    }
+
+    const teacherData = teacherSnap.data() || {};
+    const teacherEmail = (teacherData.email || "").trim().toLowerCase();
+    if (!teacherEmail) {
+      console.warn("Teacher email missing for teacher:", teacherId);
+      return;
+    }
+
+    // 4) Build student display name
+    const studentFname = (studentData.fname || "").trim();
+    const studentLname = (studentData.lname || "").trim();
+    const studentName =
+      `${studentFname} ${studentLname}`.trim() || studentIdToCheck;
+
+    // 5) Create notification doc if missing
+    const notifId = `absence_${classIdToCheck}_${studentIdToCheck}_ge${ABSENCE_THRESHOLD}`;
+    const notifRef = doc(collection(db, "notifications"), notifId);
+    const notifSnap = await getDoc(notifRef);
+    if (notifSnap.exists()) {
+      return;
+    }
+
+    await setDoc(notifRef, {
+      type: "student_absence_threshold_instructor",
+      tone: "info",
+      channel: "toast",
+      title: `${studentName} has ${absenceCount} absences in ${className}`,
+      message: `${studentName} (${studentIdToCheck}) now has ${absenceCount} recorded absences in ${className}.`,
+      classId: classIdToCheck,
+      className,
+      studentId: studentIdToCheck,
+      studentName,
+      currentAbsences: absenceCount,
+      threshold: ABSENCE_THRESHOLD,
+      targets: [teacherEmail],
+      createdAt: serverTimestamp(),
+      read: false,
+    });
+
+    await updateDoc(studentRef, {
+      [`absenceNotifications.${classIdToCheck}`]: absenceCount,
+    });
+  } catch (error) {
+    console.error("Error evaluating absence threshold notification:", error);
+  }
+};
+
 
 const TeacherStudentAttendance = () => {
   const { className: classId, studentId } = useParams();
@@ -335,6 +463,10 @@ const TeacherStudentAttendance = () => {
         date: dateToPersist,
       });
 
+      if (normalizedStatus === "Absent") {
+        await checkAbsenceThresholdAndNotify(classId, studentId);
+      }
+
       pushToast({
         tone: "success",
         title: "Attendance updated",
@@ -418,6 +550,10 @@ const TeacherStudentAttendance = () => {
         },
         { merge: true }
       );
+
+      if (newAttendanceStatus === "Absent") {
+        await checkAbsenceThresholdAndNotify(classId, studentId);
+      }
 
       pushToast({
         tone: "success",

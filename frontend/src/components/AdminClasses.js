@@ -175,12 +175,11 @@ const AdminClasses = () => {
     setIsSaving(true);
     try {
       const payload = {
-        classId: trimmedClassId,
+        id: trimmedClassId,
         name: formState.name.trim(),
         room: formState.room.trim(),
         schedule: formState.schedule.trim(),
         teacher: formState.teacher,
-        teacherName: selectedTeacherName,
       };
 
       if (editingClassId) {
