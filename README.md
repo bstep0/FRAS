@@ -5,7 +5,7 @@ An end‑to‑end web application that automates classroom attendance using faci
 
 ---
 
-## 📑 Table of Contents
+## Table of Contents
 1. [Key Features](#key-features)  
 2. [Tech Stack](#tech-stack)  
 3. [Getting Started](#getting-started)  
