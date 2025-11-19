@@ -452,34 +452,37 @@ const FaceScanner = ({ selectedClass, studentId }) => {
 
       {isPending && (
         <div
-          className="rounded-xl border border-yellow-200 bg-yellow-50/80 p-4 shadow-sm"
+          className="rounded-xl border border-unt-green/40 bg-unt-green/10 p-4 shadow-sm backdrop-blur-sm"
           role="status"
           aria-live="polite"
         >
           <div className="flex items-start gap-3">
-            <div className="mt-1 text-yellow-600" aria-hidden="true">
+            {/* Green clock icon */}
+            <div className="mt-1 text-unt-green" aria-hidden="true">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="currentColor"
                 className="h-5 w-5"
               >
-                <path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h16.78A1.5 1.5 0 0 0 21.18 18L12.71 3.86a1.5 1.5 0 0 0-2.42 0ZM12 9a1 1 0 0 1 .99 1.13l-.37 3a1 1 0 0 1-1.24.85A1 1 0 0 1 10.1 13l.37-3A1 1 0 0 1 12 9Zm1.25 7a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Z" />
+                <path d="M12 2a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2zm1 10.41 3.3 3.29a1 1 0 1 1-1.42 1.42L11 13V7a1 1 0 0 1 2 0z" />
               </svg>
             </div>
 
             <div className="flex-1 space-y-2">
+              {/* Header + countdown */}
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold uppercase tracking-wide text-yellow-800">
-                  Verification pending
+                <p className="text-sm font-bold uppercase tracking-wide text-unt-green">
+                  Verification Pending
                 </p>
+
                 {remainingSeconds !== null && (
                   <span
                     data-testid="pending-countdown"
-                    className="inline-flex items-center gap-2 rounded-full border border-yellow-300 bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-900"
+                    className="inline-flex items-center gap-2 rounded-full border border-unt-green/50 bg-white/50 px-3 py-1 text-xs font-semibold text-unt-green dark:bg-slate-900/40"
                   >
                     <span
-                      className="h-2 w-2 rounded-full bg-yellow-500 animate-pulse"
+                      className="h-2 w-2 rounded-full bg-unt-green animate-ping"
                       aria-hidden="true"
                     />
                     Auto-finalizing in {formatRemainingTime()}
@@ -487,11 +490,13 @@ const FaceScanner = ({ selectedClass, studentId }) => {
                 )}
               </div>
 
-              <p className="text-sm font-semibold text-yellow-900">
+              {/* Description */}
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                 Stay on EagleNet and keep this page open while we verify your attendance.
               </p>
-              <p className="text-sm text-yellow-800">
-                We'll finalize automatically as soon as the timer ends—please avoid closing this tab or switching networks.
+
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                We'll finalize automatically when the timer ends — please avoid closing this tab or switching networks.
               </p>
             </div>
           </div>
