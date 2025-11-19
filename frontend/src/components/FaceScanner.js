@@ -6,6 +6,8 @@ import {
   PENDING_VERIFICATION_MINUTES,
 } from "../config/api";
 
+console.log("FACE_RECOGNITION_ENDPOINT =", FACE_RECOGNITION_ENDPOINT);
+
 const FaceScanner = ({ selectedClass, studentId }) => {
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -117,63 +119,97 @@ const FaceScanner = ({ selectedClass, studentId }) => {
   }, [startVideo, stopVideo, clearPendingTimers]);
 
   const finalizeAttendance = useCallback(
-    async (recordId) => {
-      if (!recordId) return;
+  async (recordId) => {
+    if (!recordId) return;
 
-      setNotification({
-        type: "info",
-        message: "Finalizing your attendance. This may take a moment...",
+    setNotification({
+      type: "info",
+      message: "Finalizing your attendance. This may take a moment...",
+    });
+
+    try {
+      const response = await fetch(FINALIZE_ATTENDANCE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recordId }),
       });
 
+      let result = null;
       try {
-        const response = await fetch(FINALIZE_ATTENDANCE_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ recordId }),
-        });
+        result = await response.json();
+      } catch (parseError) {
+        console.error("Failed to parse finalize response JSON", parseError);
+      }
 
-        const result = await response.json();
+      if (!isMountedRef.current) return;
 
-        if (!isMountedRef.current) return;
+      if (!response.ok) {
+        // Hard failure: 4xx/5xx → show error and restart
+        const message =
+          (result && result.message) ||
+          "Unable to finalize attendance. Please try again from EagleNet.";
+        throw new Error(message);
+      }
 
-        if (!response.ok) {
-          throw new Error(result?.message || "Unable to finalize attendance");
-        }
+      const status = (result?.status || "").toLowerCase();
 
-        if (result.status === "success") {
-          setNotification({
-            type: "success",
-            message: "Attendance finalized! You're all set.",
-          });
-          resetPendingState();
-          navigationTimeoutRef.current = setTimeout(() => {
-            navigate(`/student/classes/${selectedClass}`, { replace: true });
-          }, 2000);
-        } else {
-          const guidance = "Please stay on EagleNet and try again.";
-          const fallbackMessage = `We could not confirm your attendance. ${guidance}`;
-          const combinedMessage = result.message
-            ? `${result.message}${result.message.trim().endsWith(".") ? "" : "."} ${guidance}`
-            : fallbackMessage;
-          setNotification({
-            type: "warning",
-            message: combinedMessage.trim(),
-          });
-          resetPendingState({ restartStream: true });
-        }
-      } catch (error) {
-        console.error("Failed to finalize attendance", error);
-        if (!isMountedRef.current) return;
+      // Treat both "success" and "finalized" (or similar) as success
+      if (status === "success" || status === "finalized" || status === "ok") {
         setNotification({
-          type: "error",
-          message:
-            "We lost connection while finalizing. Make sure you remain on EagleNet and recapture your photo.",
+          type: "success",
+          message: "Attendance finalized! You're all set.",
+        });
+        resetPendingState();
+        navigationTimeoutRef.current = setTimeout(() => {
+          navigate(`/student/classes/${selectedClass}`, { replace: true });
+        }, 2000);
+        return;
+      }
+
+      // If the backend explicitly says "rejected", keep the guidance
+      if (status === "rejected") {
+        const guidance = "Please stay on EagleNet and try again.";
+        const fallbackMessage = `We could not confirm your attendance. ${guidance}`;
+        const combinedMessage = result?.message
+          ? `${result.message}${
+              result.message.trim().endsWith(".") ? "" : "."
+            } ${guidance}`
+          : fallbackMessage;
+
+        setNotification({
+          type: "warning",
+          message: combinedMessage.trim(),
         });
         resetPendingState({ restartStream: true });
+        return;
       }
-    },
-    [navigate, resetPendingState, selectedClass]
-  );
+
+      // Any other weird but 200 OK response:
+      // assume the backend probably did its job and show a softer message.
+      setNotification({
+        type: "info",
+        message:
+          result?.message?.trim() ||
+          "Attendance update completed. Please verify your status in the class page.",
+      });
+      resetPendingState();
+      navigationTimeoutRef.current = setTimeout(() => {
+        navigate(`/student/classes/${selectedClass}`, { replace: true });
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to finalize attendance", error);
+      if (!isMountedRef.current) return;
+      setNotification({
+        type: "error",
+        message:
+          "We lost connection while finalizing. Make sure you remain on EagleNet and recapture your photo.",
+      });
+      resetPendingState({ restartStream: true });
+    }
+  },
+  [navigate, resetPendingState, selectedClass]
+);
+
 
   const beginPendingFlow = useCallback(
     (recordId) => {

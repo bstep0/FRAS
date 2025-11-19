@@ -489,16 +489,23 @@ def finalize_attendance():
     record_id = payload.get("recordId")
 
     if not record_id:
-        return jsonify({"status": "rejected", "message": "Missing recordId."}), 400
+        return jsonify(
+            {"status": "rejected", "message": "Missing recordId."}
+        ), 400
 
     attendance_ref = _get_attendance_collection().document(record_id)
     snapshot = attendance_ref.get()
 
     if not getattr(snapshot, "exists", False):
-        return jsonify({"status": "rejected", "message": "Attendance record not found."}), 404
+        return jsonify(
+            {"status": "rejected", "message": "Attendance record not found."}
+        ), 404
 
     record = snapshot.to_dict() or {}
     now = datetime.datetime.now(datetime.timezone.utc)
+
+    client_ip = get_client_ip(request)
+    host_header = request.headers.get("Host", "") or getattr(request, "host", "")
 
     updates = {
         "isPending": firestore.DELETE_FIELD,
@@ -506,38 +513,55 @@ def finalize_attendance():
         "finalizedAt": now,
     }
 
-    client_ip = get_client_ip(request)
-    if not is_ip_allowed(client_ip):
+    # 1) Allow any request that has come through an ngrok tunnel (same as face-recognition)
+    if "ngrok" in host_header.lower():
+        app.logger.info(
+            "Allowing attendance finalize from ngrok host %s (client_ip=%s)",
+            host_header,
+            client_ip,
+        )
+    # 2) Otherwise, enforce strict IP allowlist (EagleNet + home LAN)
+    elif not is_ip_allowed(client_ip):
         rejection_reason = (
             "Follow-up request must originate from EagleNet or an authorized home network."
         )
-        updates.update({
-            "status": "Rejected",
-            "rejectionReason": rejection_reason,
-        })
+        updates.update(
+            {
+                "status": "Rejected",
+                "rejectionReason": rejection_reason,
+            }
+        )
         attendance_ref.update(updates)
         return (
-            jsonify({
-                "status": "rejected",
-                "message": rejection_reason,
-                "recordId": record_id,
-            }),
+            jsonify(
+                {
+                    "status": "rejected",
+                    "message": rejection_reason,
+                    "recordId": record_id,
+                }
+            ),
             403,
         )
 
+    # If we got here, either:
+    #   - We're coming through ngrok, OR
+    #   - The client IP is in the allowed networks
     final_status = record.get("proposedStatus") or record.get("status") or "Unknown"
-    updates.update({
-        "status": final_status,
-        "rejectionReason": firestore.DELETE_FIELD,
-    })
+    updates.update(
+        {
+            "status": final_status,
+        }
+    )
+
     attendance_ref.update(updates)
 
-    return jsonify({
-        "status": "success",
-        "message": "Attendance finalized.",
-        "recordId": record_id,
-        "finalStatus": final_status,
-    }), 200
+    return jsonify(
+        {
+            "status": "finalized",
+            "recordId": record_id,
+            "finalStatus": final_status,
+        }
+    ), 200
 
 
 def _extract_datetime(value):
