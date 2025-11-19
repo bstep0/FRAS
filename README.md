@@ -26,7 +26,7 @@ An end‑to‑end web application that automates classroom attendance using faci
 | Layer | Technology | Hosting |
 |-------|------------|---------|
 | Frontend | **React** JSX + Vite + CSS | **Firebase Hosting** |
-| Backend | **Flask** REST API + DeepFace | **Render** |
+| Backend | **Flask** REST API + DeepFace | **Local Server** |
 | Face Recognition | **OpenCV + DeepFace** |
 | Database | **Firebase Firestore** |
 | Auth | Firebase Auth |
@@ -43,7 +43,7 @@ An end‑to‑end web application that automates classroom attendance using faci
 
 ### Clone & Bootstrap
 ```bash
-git clone https://github.com/bstep00/FacialRecognitionAttendanceSystem.git
+git clone https://github.com/bstep0/FRAS.git
 cd face-attendance
 ```
 
